@@ -562,31 +562,275 @@ it.layer(Layer.empty)((it) => {
   );
 
   it.effect(
-    "renders non-MCP stub failures as structured errors in llm mode",
+    "runs fetch with Tavily-first JSON output and backend reporting",
     Effect.fn(function* () {
       const harness = makeHarness();
+      const requests: Array<string> = [];
+      const requestBodies: Array<unknown> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input, init) => {
+            requests.push(String(input));
+            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
 
-      yield* runCli(["fetch", "--output", "llm"], Layer.mergeAll(harness.layer, unusedFetchLayer));
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  results: [
+                    {
+                      url: "https://example.com/docs",
+                      title: "Example Docs",
+                      raw_content: "# Example\n\nTavily page content",
+                    },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            );
+          },
+        }),
+      );
 
-      expect(harness.consoleStdout).toEqual([]);
+      const exit = yield* Effect.exit(
+        runCli(
+          [
+            "fetch",
+            "--url",
+            " https://example.com/docs ",
+            "--depth",
+            "advanced",
+            "--format",
+            "markdown",
+            "--output",
+            "llm",
+          ],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: "https://tavily.example.com",
+                TAVILY_API_KEY: "tavily-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(requests).toEqual(["https://tavily.example.com/extract"]);
+      expect(requestBodies).toEqual([
+        {
+          urls: ["https://example.com/docs"],
+          extract_depth: "advanced",
+          format: "markdown",
+        },
+      ]);
       expect(
         decodeJson(
           Schema.Struct({
-            error: Schema.Struct({
-              type: Schema.String,
-              command: Schema.String,
-              message: Schema.String,
-            }),
+            backend: Schema.String,
+            format: Schema.String,
+            results: Schema.NonEmptyArray(
+              Schema.Struct({
+                url: Schema.String,
+                title: Schema.NullOr(Schema.String),
+                raw_content: Schema.String,
+              }),
+            ),
           }),
-          harness.consoleStderr.join("\n"),
+          harness.consoleStdout.join("\n"),
         ),
       ).toEqual({
-        error: {
-          type: "NotImplemented",
-          command: "ultimate-search fetch",
-          message: "The 'ultimate-search fetch' command is not implemented yet.",
+        backend: "tavily",
+        format: "markdown",
+        results: [
+          {
+            url: "https://example.com/docs",
+            title: "Example Docs",
+            raw_content: "# Example\n\nTavily page content",
+          },
+        ],
+      });
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "falls back to FireCrawl when Tavily returns no extractable content",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const requests: Array<string> = [];
+      const requestBodies: Array<unknown> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input, init) => {
+            requests.push(String(input));
+            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+
+            if (String(input).includes("/extract")) {
+              return Promise.resolve(
+                new Response(
+                  JSON.stringify({
+                    results: [
+                      {
+                        url: "https://example.com/docs",
+                        title: "Example Docs",
+                        raw_content: null,
+                      },
+                    ],
+                  }),
+                  {
+                    status: 200,
+                    headers: {
+                      "content-type": "application/json",
+                    },
+                  },
+                ),
+              );
+            }
+
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  success: true,
+                  data: {
+                    markdown: "FireCrawl page content",
+                    metadata: {
+                      title: "Fallback Title",
+                    },
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            );
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["fetch", "--url", "https://example.com/docs", "--output", "llm"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: "https://tavily.example.com",
+                TAVILY_API_KEY: "tavily-secret",
+                FIRECRAWL_API_KEY: "firecrawl-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(requests).toEqual([
+        "https://tavily.example.com/extract",
+        "https://api.firecrawl.dev/v2/scrape",
+      ]);
+      expect(requestBodies).toEqual([
+        {
+          urls: ["https://example.com/docs"],
+          extract_depth: "basic",
+          format: "markdown",
+        },
+        {
+          url: "https://example.com/docs",
+          formats: ["markdown"],
+        },
+      ]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            backend: Schema.String,
+            format: Schema.String,
+            results: Schema.NonEmptyArray(
+              Schema.Struct({
+                url: Schema.String,
+                title: Schema.NullOr(Schema.String),
+                raw_content: Schema.String,
+              }),
+            ),
+            fallback: Schema.Struct({
+              from: Schema.String,
+              to: Schema.String,
+              reason: Schema.Struct({
+                type: Schema.String,
+                provider: Schema.String,
+                message: Schema.String,
+              }),
+            }),
+          }),
+          harness.consoleStdout.join("\n"),
+        ),
+      ).toEqual({
+        backend: "firecrawl",
+        format: "markdown",
+        results: [
+          {
+            url: "https://example.com/docs",
+            title: "Fallback Title",
+            raw_content: "FireCrawl page content",
+          },
+        ],
+        fallback: {
+          from: "tavily",
+          to: "firecrawl",
+          reason: {
+            type: "ProviderContentError",
+            provider: "tavily",
+            message: "Tavily returned no extractable content.",
+          },
         },
       });
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "validates fetch urls before calling providers",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const calls: Array<string> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input) => {
+            calls.push(String(input));
+            return Promise.reject(new Error("fetch should not be called"));
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["fetch", "--url", "not-a-url"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(calls).toEqual([]);
+      expect(harness.consoleStdout.join("\n")).toContain("ultimate-search fetch [flags]");
+      expect(harness.consoleStderr.join("\n")).toContain("url must be an absolute URL");
     }),
   );
 
@@ -647,6 +891,8 @@ it.layer(Layer.empty)((it) => {
             "--time-range",
             "week",
             "--include-answer",
+            "--output",
+            "llm",
           ],
           Layer.mergeAll(harness.layer, fetchLayer),
         ).pipe(
@@ -731,7 +977,7 @@ it.layer(Layer.empty)((it) => {
 
       const exit = yield* Effect.exit(
         runCli(
-          ["search", "tavily", "--query", "release notes"],
+          ["search", "tavily", "--query", "release notes", "--output", "llm"],
           Layer.mergeAll(harness.layer, fetchLayer),
           { AGENT: "codex" },
         ).pipe(
@@ -781,7 +1027,7 @@ it.layer(Layer.empty)((it) => {
 
       const exit = yield* Effect.exit(
         runCli(
-          ["search", "tavily", "--query", "release notes"],
+          ["search", "tavily", "--query", "release notes", "--output", "llm"],
           Layer.mergeAll(harness.layer, unusedFetchLayer),
           { AGENT: "codex" },
         ).pipe(

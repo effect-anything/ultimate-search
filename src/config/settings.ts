@@ -37,12 +37,18 @@ export interface TavilyProviderConfig {
   readonly apiKey: string;
 }
 
+export interface FirecrawlProviderConfig {
+  readonly apiUrl: string;
+  readonly apiKey: string;
+}
+
 export class UltimateSearchConfig extends ServiceMap.Service<
   UltimateSearchConfig,
   {
     readonly settings: UltimateSearchSettings;
     readonly getGrokConfig: () => Effect.Effect<GrokProviderConfig, UltimateSearchError>;
     readonly getTavilyConfig: () => Effect.Effect<TavilyProviderConfig, UltimateSearchError>;
+    readonly getFirecrawlConfig: () => Effect.Effect<FirecrawlProviderConfig, UltimateSearchError>;
   }
 >()("UltimateSearchConfig") {
   static readonly layer = Layer.effect(
@@ -52,16 +58,13 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         .asEffect()
         .pipe(
           Effect.mapError(
-            (error) => {
-              const details = configErrorDetails(error);
-
-              return new ConfigValidationError({
+            (error) =>
+              new ConfigValidationError({
                 provider: "shared",
                 message: "Failed to load CLI configuration.",
-                ...(details.length > 0 ? { details } : {}),
+                details: configErrorDetails(error),
                 cause: error,
-              });
-            },
+              }),
           ),
           Effect.withSpan("UltimateSearchConfig.settings"),
         );
@@ -121,10 +124,28 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         } satisfies TavilyProviderConfig;
       });
 
+      const getFirecrawlConfig: UltimateSearchConfig.Methods["getFirecrawlConfig"] = Effect.fn(
+        "UltimateSearchConfig.getFirecrawlConfig",
+      )(function* (): Effect.fn.Return<FirecrawlProviderConfig, ConfigValidationError, never> {
+        if (Option.isNone(settings.firecrawl.apiKey)) {
+          return yield* new ConfigValidationError({
+            provider: "firecrawl",
+            message: "Missing required FireCrawl configuration.",
+            details: ["Set FIRECRAWL_API_KEY to the FireCrawl bearer token."],
+          });
+        }
+
+        return {
+          apiUrl: settings.firecrawl.apiUrl,
+          apiKey: Option.getOrElse(settings.firecrawl.apiKey, () => ""),
+        } satisfies FirecrawlProviderConfig;
+      });
+
       return UltimateSearchConfig.of({
         settings,
         getGrokConfig,
         getTavilyConfig,
+        getFirecrawlConfig,
       });
     }),
   );

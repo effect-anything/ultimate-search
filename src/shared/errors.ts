@@ -31,6 +31,14 @@ export class ProviderResponseError extends Schema.TaggedErrorClass<ProviderRespo
   },
 ) {}
 
+export class ProviderContentError extends Schema.TaggedErrorClass<ProviderContentError>()(
+  "ProviderContentError",
+  {
+    provider: SearchProvider,
+    message: Schema.String,
+  },
+) {}
+
 export class ProviderDecodeError extends Schema.TaggedErrorClass<ProviderDecodeError>()(
   "ProviderDecodeError",
   {
@@ -42,6 +50,7 @@ export class ProviderDecodeError extends Schema.TaggedErrorClass<ProviderDecodeE
 
 export type UltimateSearchError =
   | ConfigValidationError
+  | ProviderContentError
   | ProviderRequestError
   | ProviderResponseError
   | ProviderDecodeError;

@@ -4,12 +4,13 @@ import { UltimateSearchConfig } from "../../config/settings";
 import {
   TavilySearchDepthSchema,
   TavilySearchInput,
+  type TavilySearchResponse,
   TavilySearchTopicSchema,
   TavilyTimeRangeSchema,
 } from "../../providers/tavily/schema";
 import { TavilyProviderClient } from "../../providers/tavily/client";
 import { TavilySearch } from "../../services/tavily-search";
-import { writeJsonStdout } from "../../shared/output";
+import { CliOutput, outputFlag } from "../../shared/output";
 import { trimmedNonEmptyStringSchema } from "../../shared/schema";
 
 const tavilyCommandLayer = TavilySearch.layer.pipe(
@@ -26,6 +27,30 @@ const optionalChoiceFlag = <A extends string>(
     Flag.map((value) => Option.filter(value, () => true)),
     Flag.withDescription(description),
   );
+
+const renderHumanTavilyResult = (result: TavilySearchResponse) => {
+  const lines: Array<string> = [];
+
+  if (result.answer != null && result.answer.trim().length > 0) {
+    lines.push(result.answer.trim(), "");
+  }
+
+  if (result.response_time != null) {
+    lines.push(`Response time: ${result.response_time}s`, "");
+  }
+
+  for (const [index, item] of result.results.entries()) {
+    lines.push(`${index + 1}. ${item.title}`);
+    lines.push(item.url);
+    lines.push(item.content.trim());
+
+    if (index < result.results.length - 1) {
+      lines.push("");
+    }
+  }
+
+  return lines.join("\n").trim();
+};
 
 export const commandSearchTavily = Command.make(
   "tavily",
@@ -57,13 +82,18 @@ export const commandSearchTavily = Command.make(
     includeAnswer: Flag.boolean("include-answer").pipe(
       Flag.withDescription("Request a synthesized Tavily answer in the response."),
     ),
+    output: outputFlag,
   },
   Effect.fn(function* (input) {
     const request = yield* TavilySearchInput.decodeEffect(input);
     const tavilySearch = yield* TavilySearch;
+    const cliOutput = yield* CliOutput;
     const result = yield* tavilySearch.search(request);
 
-    yield* writeJsonStdout(result);
+    yield* cliOutput.writeOutput({
+      human: cliOutput.mode === "human" ? renderHumanTavilyResult(result) : "",
+      llm: result,
+    });
   }),
 ).pipe(
   Command.withDescription("Run Tavily-backed search."),

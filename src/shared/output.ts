@@ -3,6 +3,7 @@ import { Flag } from "effect/unstable/cli";
 import { writeStderr, writeStdout } from "../cli/io";
 import {
   ConfigValidationError,
+  ProviderContentError,
   ProviderDecodeError,
   ProviderRequestError,
   ProviderResponseError,
@@ -75,6 +76,14 @@ const renderError = (error: unknown) => {
   }
 
   if (error instanceof ProviderRequestError) {
+    return {
+      type: error._tag,
+      provider: error.provider,
+      message: error.message,
+    };
+  }
+
+  if (error instanceof ProviderContentError) {
     return {
       type: error._tag,
       provider: error.provider,
@@ -160,6 +169,12 @@ const renderHumanError = (error: unknown) => {
 
   if (error instanceof ProviderRequestError) {
     return trimTrailingWhitespace([`Request failed (${error.provider})`, error.message].join("\n"));
+  }
+
+  if (error instanceof ProviderContentError) {
+    return trimTrailingWhitespace(
+      [`Provider returned no usable content (${error.provider})`, error.message].join("\n"),
+    );
   }
 
   if (error instanceof ProviderResponseError) {

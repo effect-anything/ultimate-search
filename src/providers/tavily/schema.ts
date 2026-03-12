@@ -5,9 +5,17 @@ export const TavilySearchDepthSchema = Schema.Literals(["basic", "advanced"] as 
 
 export type TavilySearchDepth = typeof TavilySearchDepthSchema.Type;
 
+export const TavilyExtractDepthSchema = TavilySearchDepthSchema;
+
+export type TavilyExtractDepth = typeof TavilyExtractDepthSchema.Type;
+
 export const TavilySearchTopicSchema = Schema.Literals(["general", "news", "finance"] as const);
 
 export type TavilySearchTopic = typeof TavilySearchTopicSchema.Type;
+
+export const FetchContentFormatSchema = Schema.Literals(["markdown", "text"] as const);
+
+export type FetchContentFormat = typeof FetchContentFormatSchema.Type;
 
 export const TavilyTimeRangeSchema = Schema.Literals(["day", "week", "month", "year"] as const);
 
@@ -80,6 +88,28 @@ export const TavilySearchResponseSchema = Schema.Struct({
 
 export type TavilySearchResponse = typeof TavilySearchResponseSchema.Type;
 
+export const TavilyExtractRequestSchema = Schema.Struct({
+  urls: Schema.NonEmptyArray(Schema.String),
+  extract_depth: Schema.optional(TavilyExtractDepthSchema),
+  format: Schema.optional(FetchContentFormatSchema),
+});
+
+export type TavilyExtractRequest = typeof TavilyExtractRequestSchema.Type;
+
+export const TavilyExtractResultItemSchema = Schema.Struct({
+  url: Schema.String,
+  title: Schema.optional(Schema.NullOr(Schema.String)),
+  raw_content: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
+export type TavilyExtractResultItem = typeof TavilyExtractResultItemSchema.Type;
+
+export const TavilyExtractResponseSchema = Schema.Struct({
+  results: Schema.Array(TavilyExtractResultItemSchema),
+});
+
+export type TavilyExtractResponse = typeof TavilyExtractResponseSchema.Type;
+
 export class TavilySearchInput extends Schema.Class<TavilySearchInput>("TavilySearchInput")({
   query: trimmedNonEmptyStringSchema("query must be a non-empty string"),
   searchDepth: Schema.Option(TavilySearchDepthSchema),
@@ -88,7 +118,7 @@ export class TavilySearchInput extends Schema.Class<TavilySearchInput>("TavilySe
   maxResults: Schema.Option(maxResultsSchema),
   includeAnswer: Schema.Boolean,
 }) {
-  static decodeEffect = Schema.decodeUnknownEffect(TavilySearchInput)
+  static decodeEffect = Schema.decodeUnknownEffect(TavilySearchInput);
 }
 
 export const buildTavilySearchRequest = (input: TavilySearchInput): TavilySearchRequest => ({
@@ -139,9 +169,11 @@ export class TavilyMapInput extends Schema.Class<TavilyMapInput>("TavilyMapInput
   depth: Schema.Option(TavilyMapDepthSchema),
   breadth: Schema.Option(TavilyMapBreadthSchema),
   limit: Schema.Option(TavilyMapLimitSchema),
-  instructions: Schema.Option(trimmedNonEmptyStringSchema("instructions must be a non-empty string")),
+  instructions: Schema.Option(
+    trimmedNonEmptyStringSchema("instructions must be a non-empty string"),
+  ),
 }) {
-  static decodeEffect = Schema.decodeUnknownEffect(TavilyMapInput)
+  static decodeEffect = Schema.decodeUnknownEffect(TavilyMapInput);
 }
 
 export const buildTavilyMapRequest = (input: TavilyMapInput): TavilyMapRequest => ({
@@ -159,3 +191,17 @@ export const buildTavilyMapRequest = (input: TavilyMapInput): TavilyMapRequest =
     instructions: input.instructions.value,
   }),
 });
+
+export const buildTavilyExtractRequest = (input: {
+  readonly urls: readonly [string, ...Array<string>];
+  readonly depth: TavilyExtractDepth;
+  readonly format: FetchContentFormat;
+}): TavilyExtractRequest => {
+  const [firstUrl, ...remainingUrls] = input.urls;
+
+  return {
+    urls: [firstUrl, ...remainingUrls],
+    extract_depth: input.depth,
+    format: input.format,
+  };
+};
