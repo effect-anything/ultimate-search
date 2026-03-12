@@ -957,6 +957,121 @@ it.layer(Layer.empty)((it) => {
   );
 
   it.effect(
+    "preserves partial provider failure as top-level dual-search JSON",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const requests: Array<string> = [];
+      const requestBodies: Array<unknown> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input, init) => {
+            requests.push(String(input));
+            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  model: "grok-test",
+                  choices: [
+                    {
+                      message: {
+                        role: "assistant",
+                        content: "Mocked Grok answer",
+                      },
+                    },
+                  ],
+                  usage: {
+                    prompt_tokens: 12,
+                    completion_tokens: 34,
+                    total_tokens: 46,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            );
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          [
+            "search",
+            "dual",
+            "--query",
+            "  FastAPI releases  ",
+            "--platform",
+            "  GitHub  ",
+            "--output",
+            "llm",
+          ],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                GROK_API_URL: " https://grok.example.com/ ",
+                GROK_API_KEY: "secret-token",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(requests).toEqual(["https://grok.example.com/v1/chat/completions"]);
+      expect(requestBodies).toEqual([
+        expect.objectContaining({
+          model: "grok-4.1-fast",
+          messages: [
+            expect.objectContaining({
+              role: "system",
+            }),
+            {
+              role: "user",
+              content: "FastAPI releases\n\nYou should focus on these platform: GitHub",
+            },
+          ],
+        }),
+      ]);
+      expect(decodeJson<unknown>(Schema.Unknown, harness.consoleStdout.join("\n"))).toEqual({
+        grok: {
+          status: "success",
+          result: {
+            content: "Mocked Grok answer",
+            model: "grok-test",
+            usage: {
+              prompt_tokens: 12,
+              completion_tokens: 34,
+              total_tokens: 46,
+            },
+          },
+        },
+        tavily: {
+          status: "error",
+          error: {
+            type: "ConfigValidationError",
+            provider: "tavily",
+            message: "Missing required Tavily configuration.",
+            details: [
+              "Set TAVILY_API_URL to the Tavily or Tavily proxy base URL.",
+              "Set TAVILY_API_KEY to the Tavily or Tavily proxy bearer token.",
+            ],
+          },
+        },
+      });
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
     "renders provider errors for tavily search failures",
     Effect.fn(function* () {
       const harness = makeHarness();

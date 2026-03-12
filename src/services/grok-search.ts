@@ -25,10 +25,10 @@ export class GrokSearch extends ServiceMap.Service<
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
       const provider = yield* GrokProviderClient;
-      const grok = yield* config.getGrokConfig();
 
       const search: GrokSearch.Methods["search"] = Effect.fn("search")(
         function* (input): GrokSearch.Returns<"search"> {
+          const grok = yield* config.getGrokConfig();
           const payload: GrokChatCompletionRequest = {
             model: Option.getOrElse(input.model, () => grok.model),
             stream: false,

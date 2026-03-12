@@ -8,6 +8,7 @@ import {
   ProviderRequestError,
   ProviderResponseError,
 } from "./errors";
+import { renderStructuredError } from "./render-error";
 
 const stringify = (value: unknown) => JSON.stringify(value, null, 2);
 const maxHumanErrorBodyLength = 500;
@@ -63,69 +64,11 @@ const configErrorDetails = (error: ConfigValidationError): Array<string> => {
   return [];
 };
 
-const renderError = (error: unknown) => {
-  if (error instanceof ConfigValidationError) {
-    const details = configErrorDetails(error);
-
-    return {
-      type: error._tag,
-      provider: error.provider,
-      message: error.message,
-      ...(details.length > 0 ? { details } : {}),
-    };
-  }
-
-  if (error instanceof ProviderRequestError) {
-    return {
-      type: error._tag,
-      provider: error.provider,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof ProviderContentError) {
-    return {
-      type: error._tag,
-      provider: error.provider,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof ProviderResponseError) {
-    return {
-      type: error._tag,
-      provider: error.provider,
-      message: error.message,
-      status: error.status,
-      body: error.body,
-    };
-  }
-
-  if (error instanceof ProviderDecodeError) {
-    return {
-      type: error._tag,
-      provider: error.provider,
-      message: error.message,
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      type: error.name,
-      message: error.message,
-    };
-  }
-
-  return {
-    type: "UnknownError",
-    message: String(error),
-  };
-};
-
 export const writeJsonStdout = (value: unknown) => writeStdout(stringify(value));
+export const renderJsonText = (value: unknown) => stringify(value);
 
 export const writeRenderedError = (error: unknown) =>
-  writeStderr(stringify({ error: renderError(error) }));
+  writeStderr(stringify({ error: renderStructuredError(error) }));
 
 const resolveOutputModeFromArgs = (
   args: ReadonlyArray<string>,

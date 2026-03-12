@@ -54,31 +54,21 @@ export class UltimateSearchConfig extends ServiceMap.Service<
   static readonly layer = Layer.effect(
     UltimateSearchConfig,
     Effect.gen(function* () {
-      const settings: UltimateSearchConfig.Methods["settings"] = yield* settingsConfig
-        .asEffect()
-        .pipe(
-          Effect.mapError(
-            (error) =>
-              new ConfigValidationError({
-                provider: "shared",
-                message: "Failed to load CLI configuration.",
-                details: configErrorDetails(error),
-                cause: error,
-              }),
-          ),
-          Effect.withSpan("UltimateSearchConfig.settings"),
-        );
+      const settings: UltimateSearchConfig.Methods["settings"] = yield* loadSettings.pipe(
+        Effect.withSpan("UltimateSearchConfig.settings"),
+      );
 
       const getGrokConfig: UltimateSearchConfig.Methods["getGrokConfig"] = Effect.fn(
         "UltimateSearchConfig.getGrokConfig",
       )(function* (): Effect.fn.Return<GrokProviderConfig, ConfigValidationError, never> {
+        const grok = yield* strictConfigEffect(grokEnvironmentConfig);
         const details: Array<string> = [];
 
-        if (Option.isNone(settings.grok.apiUrl)) {
+        if (Option.isNone(grok.apiUrl)) {
           details.push("Set GROK_API_URL to the grok2api base URL.");
         }
 
-        if (Option.isNone(settings.grok.apiKey)) {
+        if (Option.isNone(grok.apiKey)) {
           details.push("Set GROK_API_KEY to the grok2api bearer token.");
         }
 
@@ -91,22 +81,23 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         }
 
         return {
-          apiUrl: Option.getOrElse(settings.grok.apiUrl, () => ""),
-          apiKey: Option.getOrElse(settings.grok.apiKey, () => ""),
-          model: settings.grok.model,
+          apiUrl: Option.getOrElse(grok.apiUrl, () => ""),
+          apiKey: Option.getOrElse(grok.apiKey, () => ""),
+          model: grok.model,
         } satisfies GrokProviderConfig;
       });
 
       const getTavilyConfig: UltimateSearchConfig.Methods["getTavilyConfig"] = Effect.fn(
         "UltimateSearchConfig.getTavilyConfig",
       )(function* (): Effect.fn.Return<TavilyProviderConfig, ConfigValidationError, never> {
+        const tavily = yield* strictConfigEffect(tavilyEnvironmentConfig);
         const details: Array<string> = [];
 
-        if (Option.isNone(settings.tavily.apiUrl)) {
+        if (Option.isNone(tavily.apiUrl)) {
           details.push("Set TAVILY_API_URL to the Tavily or Tavily proxy base URL.");
         }
 
-        if (Option.isNone(settings.tavily.apiKey)) {
+        if (Option.isNone(tavily.apiKey)) {
           details.push("Set TAVILY_API_KEY to the Tavily or Tavily proxy bearer token.");
         }
 
@@ -119,15 +110,17 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         }
 
         return {
-          apiUrl: Option.getOrElse(settings.tavily.apiUrl, () => ""),
-          apiKey: Option.getOrElse(settings.tavily.apiKey, () => ""),
+          apiUrl: Option.getOrElse(tavily.apiUrl, () => ""),
+          apiKey: Option.getOrElse(tavily.apiKey, () => ""),
         } satisfies TavilyProviderConfig;
       });
 
       const getFirecrawlConfig: UltimateSearchConfig.Methods["getFirecrawlConfig"] = Effect.fn(
         "UltimateSearchConfig.getFirecrawlConfig",
       )(function* (): Effect.fn.Return<FirecrawlProviderConfig, ConfigValidationError, never> {
-        if (Option.isNone(settings.firecrawl.apiKey)) {
+        const firecrawl = yield* strictConfigEffect(firecrawlEnvironmentConfig);
+
+        if (Option.isNone(firecrawl.apiKey)) {
           return yield* new ConfigValidationError({
             provider: "firecrawl",
             message: "Missing required FireCrawl configuration.",
@@ -136,8 +129,8 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         }
 
         return {
-          apiUrl: settings.firecrawl.apiUrl,
-          apiKey: Option.getOrElse(settings.firecrawl.apiKey, () => ""),
+          apiUrl: firecrawl.apiUrl,
+          apiKey: Option.getOrElse(firecrawl.apiKey, () => ""),
         } satisfies FirecrawlProviderConfig;
       });
 
@@ -179,21 +172,59 @@ const requiredUrlConfig = (name: string, fallback: string) =>
     name,
   ).pipe(Config.withDefault(Option.none<string>()), Config.map(Option.getOrElse(() => fallback)));
 
-const settingsConfig = Config.all({
-  grok: Config.all({
-    apiUrl: optionalUrlConfig("GROK_API_URL"),
-    apiKey: optionalSecretConfig("GROK_API_KEY"),
-    model: requiredTextConfig("GROK_MODEL", "grok-4.1-fast"),
-  }),
-  tavily: Config.all({
-    apiUrl: optionalUrlConfig("TAVILY_API_URL"),
-    apiKey: optionalSecretConfig("TAVILY_API_KEY"),
-  }),
-  firecrawl: Config.all({
-    apiUrl: requiredUrlConfig("FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2"),
-    apiKey: optionalSecretConfig("FIRECRAWL_API_KEY"),
-  }),
-}) satisfies Config.Config<UltimateSearchSettings>;
+const grokEnvironmentConfig = Config.all({
+  apiUrl: optionalUrlConfig("GROK_API_URL"),
+  apiKey: optionalSecretConfig("GROK_API_KEY"),
+  model: requiredTextConfig("GROK_MODEL", "grok-4.1-fast"),
+}) satisfies Config.Config<GrokEnvironment>;
+
+const tavilyEnvironmentConfig = Config.all({
+  apiUrl: optionalUrlConfig("TAVILY_API_URL"),
+  apiKey: optionalSecretConfig("TAVILY_API_KEY"),
+}) satisfies Config.Config<ProviderEnvironment>;
+
+const firecrawlEnvironmentConfig = Config.all({
+  apiUrl: requiredUrlConfig("FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2"),
+  apiKey: optionalSecretConfig("FIRECRAWL_API_KEY"),
+}) satisfies Config.Config<FirecrawlEnvironment>;
+
+const defaultGrokEnvironment: GrokEnvironment = {
+  apiUrl: Option.none(),
+  apiKey: Option.none(),
+  model: "grok-4.1-fast",
+};
+
+const defaultTavilyEnvironment: ProviderEnvironment = {
+  apiUrl: Option.none(),
+  apiKey: Option.none(),
+};
+
+const defaultFirecrawlEnvironment: FirecrawlEnvironment = {
+  apiUrl: "https://api.firecrawl.dev/v2",
+  apiKey: Option.none(),
+};
+
+const mapConfigLoadError = (error: unknown) =>
+  new ConfigValidationError({
+    provider: "shared",
+    message: "Failed to load CLI configuration.",
+    details: configErrorDetails(error),
+    cause: error,
+  });
+
+const strictConfigEffect = <A>(config: Config.Config<A>) =>
+  config
+    .asEffect()
+    .pipe(Effect.mapError(mapConfigLoadError), Effect.withSpan("UltimateSearchConfig.settings"));
+
+const bestEffortConfigEffect = <A>(config: Config.Config<A>, fallback: A) =>
+  strictConfigEffect(config).pipe(Effect.catch(() => Effect.succeed(fallback)));
+
+const loadSettings = Effect.all({
+  grok: bestEffortConfigEffect(grokEnvironmentConfig, defaultGrokEnvironment),
+  tavily: bestEffortConfigEffect(tavilyEnvironmentConfig, defaultTavilyEnvironment),
+  firecrawl: bestEffortConfigEffect(firecrawlEnvironmentConfig, defaultFirecrawlEnvironment),
+}) satisfies Effect.Effect<UltimateSearchSettings, never, never>;
 
 const configErrorDetails = (error: unknown): Array<string> => {
   if (error instanceof Config.ConfigError && error.message.length > 0) {

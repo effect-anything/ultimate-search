@@ -48,12 +48,12 @@ export class GrokProviderClient extends ServiceMap.Service<
     GrokProviderClient,
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
-      const grok = yield* config.getGrokConfig();
       const fetchService = yield* FetchService;
 
       const createChatCompletion: GrokProviderClient.Methods["createChatCompletion"] = Effect.fn(
         "GrokProviderClient.createChatCompletion",
       )(function* (payload): GrokProviderClient.Returns<"createChatCompletion"> {
+        const grok = yield* config.getGrokConfig();
         const requestBody = yield* encodeGrokChatCompletionRequest(payload).pipe(
           Effect.mapError((error) =>
             mapRequestError(error, "Failed to encode the Grok request payload."),
