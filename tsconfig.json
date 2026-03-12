@@ -31,5 +31,13 @@
     ]
   },
   "include": ["./src", "./tests"],
-  "exclude": [".repo/**/*", ".direnv/**/*", "dist", "node_modules"]
+  "exclude": [
+    ".repo/**/*",
+    ".direnv/**/*",
+    ".lalph/**/*",
+    ".codemogger/**/*",
+    ".specs/**/*",
+    "dist",
+    "node_modules"
+  ]
 }

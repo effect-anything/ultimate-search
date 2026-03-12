@@ -9,9 +9,6 @@
       "components": {},
       "attributes": {}
     },
-    "next": {
-      "rootDir": []
-    },
     "react": {
       "formComponents": [],
       "linkComponents": [],
@@ -36,5 +33,14 @@
     "builtin": true
   },
   "globals": {},
-  "ignorePatterns": []
+  "ignorePatterns": [
+    ".repo/**",
+    ".direnv/**",
+    ".lalph/**",
+    ".codemogger/**",
+    ".specs/**",
+    ".jj/**",
+    "dist/**",
+    "node_modules/**"
+  ]
 }

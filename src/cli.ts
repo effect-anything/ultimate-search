@@ -1,13 +1,4 @@
-console.log("OK");
-function test() {
-  console.log("1");
+import { BunRuntime } from "@effect/platform-bun";
+import { cliProgram } from "./cli/program.ts";
 
-  function inner() {
-    throw new Error("OK");
-    return "OK";
-  }
-
-  inner();
-}
-
-test();
+BunRuntime.runMain(cliProgram);
