@@ -7,26 +7,26 @@
       "formatter": [
         {
           "language_server": {
-            "name": "oxfmt",
-          },
+            "name": "oxfmt"
+          }
         },
         {
-          "code_action": "source.fixAll.oxc",
-        },
-      ],
+          "code_action": "source.fixAll.oxc"
+        }
+      ]
     },
     "JSONC": {
       "language_servers": ["oxlint", "oxfmt", "cspell", "json-language-server"],
       "formatter": [
         {
           "language_server": {
-            "name": "oxfmt",
-          },
+            "name": "oxfmt"
+          }
         },
         {
-          "code_action": "source.fixAll.oxc",
-        },
-      ],
+          "code_action": "source.fixAll.oxc"
+        }
+      ]
     },
     "JavaScript": {
       "language_servers": ["vtsls", "oxlint", "oxfmt", "cspell"],
@@ -34,40 +34,40 @@
       "formatter": [
         {
           "language_server": {
-            "name": "oxfmt",
-          },
+            "name": "oxfmt"
+          }
         },
         {
-          "code_action": "source.fixAll.oxc",
-        },
-      ],
+          "code_action": "source.fixAll.oxc"
+        }
+      ]
     },
     "TypeScript": {
       "language_servers": ["vtsls", "oxlint", "oxfmt", "cspell"],
       "formatter": [
         {
           "language_server": {
-            "name": "oxfmt",
-          },
+            "name": "oxfmt"
+          }
         },
         {
-          "code_action": "source.fixAll.oxc",
-        },
-      ],
+          "code_action": "source.fixAll.oxc"
+        }
+      ]
     },
     "TSX": {
       "language_servers": ["vtsls", "oxlint", "oxfmt", "cspell"],
       "formatter": [
         {
           "language_server": {
-            "name": "oxfmt",
-          },
+            "name": "oxfmt"
+          }
         },
         {
-          "code_action": "source.fixAll.oxc",
-        },
-      ],
-    },
+          "code_action": "source.fixAll.oxc"
+        }
+      ]
+    }
   },
   "lsp": {
     "oxlint": {
@@ -77,9 +77,9 @@
           "fixKind": "safe_fix",
           "run": "onType",
           "typeAware": false,
-          "unusedDisableDirectives": "deny",
-        },
-      },
+          "unusedDisableDirectives": "deny"
+        }
+      }
     },
     "oxfmt": {
       "initialization_options": {
@@ -90,21 +90,21 @@
           "fmt.experimental": true,
           "run": "onSave",
           "typeAware": false,
-          "unusedDisableDirectives": false,
-        },
-      },
+          "unusedDisableDirectives": false
+        }
+      }
     },
     "vtsls": {
       "settings": {
         "tsserver": {
           "maxTsServerMemory": 8092,
-          "enableRegionDiagnostics": true,
+          "enableRegionDiagnostics": true
         },
         "experimental": {
           "completion": {
             "entriesLimit": 10,
-            "enableServerSideFuzzyMatch": true,
-          },
+            "enableServerSideFuzzyMatch": true
+          }
         },
         "autoUseWorkspaceTsdk": true,
         "typescript": {
@@ -113,18 +113,18 @@
           "preferGoToSourceDefinition": true,
           "preferences": {
             "importModuleSpecifier": "non-relative",
-            "autoImportSpecifierExcludeRegexes": ["^node:.*$", "effect/.*", "@effect/.*"],
-          },
-        },
-      },
+            "autoImportSpecifierExcludeRegexes": ["^node:.*$", "effect/.*", "@effect/.*"]
+          }
+        }
+      }
     },
     "tailwindcss-language-server": {
       "settings": {
         "tailwindCSS": {
-          "emmetCompletions": true,
-        },
-      },
-    },
+          "emmetCompletions": true
+        }
+      }
+    }
   },
   "file_scan_exclusions": [
     ".direnv",
@@ -132,6 +132,6 @@
     "**/build",
     "**/dist",
     "**/.wrangler",
-    "**/*.tsbuildinfo",
-  ],
+    "**/*.tsbuildinfo"
+  ]
 }
