@@ -5,6 +5,7 @@ logs/
 .DS_Store
 *.txt.bak
 
+.direnv
 dist
 
 .repo/*
