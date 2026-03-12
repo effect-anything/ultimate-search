@@ -1,33 +1,20 @@
 import { Effect, Layer, Schema, ServiceMap } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { UltimateSearchConfig } from "../../config/settings";
 import type { ServicesReturns } from "../../shared/effect";
-import { FetchService } from "../../shared/fetch";
+import { ProviderDecodeError, type UltimateSearchError } from "../../shared/errors";
 import {
-  ProviderDecodeError,
-  ProviderRequestError,
-  ProviderResponseError,
-  type UltimateSearchError,
-} from "../../shared/errors";
+  catchProviderHttpError,
+  decodeJsonResponse,
+  makeProviderHttpClient,
+} from "../../shared/provider-http-client";
 import {
-  FirecrawlScrapeRequestSchema,
   type FirecrawlScrapeRequest,
   FirecrawlScrapeResponseSchema,
   type FirecrawlScrapeResponse,
 } from "./schema";
 
-const encodeFirecrawlScrapeRequest = Schema.encodeUnknownEffect(
-  Schema.fromJsonString(FirecrawlScrapeRequestSchema),
-);
-
-const decodeFirecrawlScrapeResponse = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(FirecrawlScrapeResponseSchema),
-);
-
-const mapRequestError = (error: unknown, fallback: string) =>
-  new ProviderRequestError({
-    provider: "firecrawl",
-    message: error instanceof Error ? error.message : fallback,
-  });
+const decodeFirecrawlScrapeResponse = Schema.decodeUnknownEffect(FirecrawlScrapeResponseSchema);
 
 const mapDecodeError = (error: unknown, fallback: string) =>
   new ProviderDecodeError({
@@ -48,49 +35,30 @@ export class FirecrawlProviderClient extends ServiceMap.Service<
     FirecrawlProviderClient,
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
-      const fetchService = yield* FetchService;
+      const httpClient = makeProviderHttpClient(yield* HttpClient.HttpClient);
 
       const scrape: FirecrawlProviderClient.Methods["scrape"] = Effect.fn(
         "FirecrawlProviderClient.scrape",
       )(function* (payload): FirecrawlProviderClient.Returns<"scrape"> {
         const firecrawl = yield* config.getFirecrawlConfig();
-        const requestBody = yield* encodeFirecrawlScrapeRequest(payload).pipe(
-          Effect.mapError((error) =>
-            mapRequestError(error, "Failed to encode the FireCrawl request payload."),
-          ),
+        const request = HttpClientRequest.post(`${firecrawl.apiUrl}/scrape`).pipe(
+          HttpClientRequest.acceptJson,
+          HttpClientRequest.bearerToken(firecrawl.apiKey),
+          HttpClientRequest.bodyJsonUnsafe(payload),
         );
 
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetchService.fetch(`${firecrawl.apiUrl}/scrape`, {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${firecrawl.apiKey}`,
-              },
-              body: requestBody,
-            }),
-          catch: (error) => mapRequestError(error, "Failed to send the FireCrawl request."),
-        });
+        const response = yield* httpClient
+          .execute(request)
+          .pipe(
+            catchProviderHttpError(
+              "firecrawl",
+              "Failed to send the FireCrawl request.",
+              (status: number) => `FireCrawl returned HTTP ${status}.`,
+            ),
+          );
 
-        const bodyText = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: (error) => mapRequestError(error, "Failed to read the FireCrawl response body."),
-        });
-
-        if (!response.ok) {
-          return yield* new ProviderResponseError({
-            provider: "firecrawl",
-            message: `FireCrawl returned HTTP ${response.status}.`,
-            status: response.status,
-            body: bodyText,
-          });
-        }
-
-        return yield* decodeFirecrawlScrapeResponse(bodyText).pipe(
-          Effect.mapError((error) =>
-            mapDecodeError(error, "Failed to decode the FireCrawl response payload."),
-          ),
+        return yield* decodeJsonResponse(response, decodeFirecrawlScrapeResponse, (error) =>
+          mapDecodeError(error, "Failed to decode the FireCrawl response payload."),
         );
       });
 

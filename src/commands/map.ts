@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { UltimateSearchConfig } from "../config/settings";
 import {
@@ -10,18 +10,18 @@ import {
 } from "../providers/tavily/schema";
 import { TavilyProviderClient } from "../providers/tavily/client";
 import { TavilyMap } from "../services/tavily-map";
-import { CliOutput, outputFlag } from "../shared/output";
+import {
+  optionalIntegerFlagWithSchema,
+  optionalTrimmedTextFlag,
+} from "../shared/cli-flags";
+import { runCommandWithOutput } from "../shared/command-output";
+import { outputFlag } from "../shared/output";
 import { absoluteUrlStringSchema } from "../shared/schema";
 
 const mapCommandLayer = TavilyMap.layer.pipe(
   Layer.provideMerge(TavilyProviderClient.layer),
   Layer.provideMerge(UltimateSearchConfig.layer),
 );
-
-const optionalTrimmedTextFlag = (name: string, description: string) =>
-  Flag.optional(
-    Flag.string(name).pipe(Flag.withSchema(Schema.Trim), Flag.withDescription(description)),
-  ).pipe(Flag.map((value) => Option.filter(value, (text) => text.length > 0)));
 
 const renderHumanMapResult = (result: TavilyMapResponse) => {
   const lines = [
@@ -51,23 +51,20 @@ export const commandMap = Command.make(
       Flag.withSchema(absoluteUrlStringSchema("url must be an absolute URL")),
       Flag.withDescription("Root URL to map with Tavily."),
     ),
-    depth: Flag.optional(
-      Flag.integer("depth").pipe(
-        Flag.withSchema(TavilyMapDepthSchema),
-        Flag.withDescription("Optional crawl depth between 1 and 5."),
-      ),
+    depth: optionalIntegerFlagWithSchema(
+      "depth",
+      TavilyMapDepthSchema,
+      "Optional crawl depth between 1 and 5.",
     ),
-    breadth: Flag.optional(
-      Flag.integer("breadth").pipe(
-        Flag.withSchema(TavilyMapBreadthSchema),
-        Flag.withDescription("Optional crawl breadth between 1 and 500."),
-      ),
+    breadth: optionalIntegerFlagWithSchema(
+      "breadth",
+      TavilyMapBreadthSchema,
+      "Optional crawl breadth between 1 and 500.",
     ),
-    limit: Flag.optional(
-      Flag.integer("limit").pipe(
-        Flag.withSchema(TavilyMapLimitSchema),
-        Flag.withDescription("Optional maximum number of discovered URLs to return."),
-      ),
+    limit: optionalIntegerFlagWithSchema(
+      "limit",
+      TavilyMapLimitSchema,
+      "Optional maximum number of discovered URLs to return.",
     ),
     instructions: optionalTrimmedTextFlag(
       "instructions",
@@ -76,15 +73,18 @@ export const commandMap = Command.make(
     output: outputFlag,
   },
   Effect.fn(function* (input) {
-    const request = yield* TavilyMapInput.decodeEffect(input);
-    const tavilyMap = yield* TavilyMap;
-    const cliOutput = yield* CliOutput;
-    const result = yield* tavilyMap.map(request);
+    yield* runCommandWithOutput(input.output, () =>
+      Effect.gen(function* () {
+        const request = yield* TavilyMapInput.decodeEffect(input);
+        const tavilyMap = yield* TavilyMap;
+        const result = yield* tavilyMap.map(request);
 
-    yield* cliOutput.writeOutput({
-      human: renderHumanMapResult(result),
-      llm: result,
-    });
+        return {
+          human: renderHumanMapResult(result),
+          llm: result,
+        };
+      }),
+    );
   }),
 ).pipe(
   Command.withDescription("Map a site's reachable URLs with Tavily."),

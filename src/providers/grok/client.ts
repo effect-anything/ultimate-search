@@ -1,33 +1,22 @@
 import { Effect, Layer, Schema, ServiceMap } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { UltimateSearchConfig } from "../../config/settings";
 import type { ServicesReturns } from "../../shared/effect";
-import { FetchService } from "../../shared/fetch";
+import { ProviderDecodeError, type UltimateSearchError } from "../../shared/errors";
 import {
-  ProviderDecodeError,
-  ProviderRequestError,
-  ProviderResponseError,
-  type UltimateSearchError,
-} from "../../shared/errors";
+  catchProviderHttpError,
+  decodeJsonResponse,
+  makeProviderHttpClient,
+} from "../../shared/provider-http-client";
 import {
-  GrokChatCompletionRequestSchema,
   type GrokChatCompletionRequest,
   GrokChatCompletionResponseSchema,
   type GrokChatCompletionResponse,
 } from "./schema";
 
-const encodeGrokChatCompletionRequest = Schema.encodeUnknownEffect(
-  Schema.fromJsonString(GrokChatCompletionRequestSchema),
-);
-
 const decodeGrokChatCompletionResponse = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(GrokChatCompletionResponseSchema),
+  GrokChatCompletionResponseSchema,
 );
-
-const mapRequestError = (error: unknown, fallback: string) =>
-  new ProviderRequestError({
-    provider: "grok",
-    message: error instanceof Error ? error.message : fallback,
-  });
 
 const mapDecodeError = (error: unknown, fallback: string) =>
   new ProviderDecodeError({
@@ -48,49 +37,30 @@ export class GrokProviderClient extends ServiceMap.Service<
     GrokProviderClient,
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
-      const fetchService = yield* FetchService;
+      const httpClient = makeProviderHttpClient(yield* HttpClient.HttpClient);
 
       const createChatCompletion: GrokProviderClient.Methods["createChatCompletion"] = Effect.fn(
         "GrokProviderClient.createChatCompletion",
       )(function* (payload): GrokProviderClient.Returns<"createChatCompletion"> {
         const grok = yield* config.getGrokConfig();
-        const requestBody = yield* encodeGrokChatCompletionRequest(payload).pipe(
-          Effect.mapError((error) =>
-            mapRequestError(error, "Failed to encode the Grok request payload."),
-          ),
+        const request = HttpClientRequest.post(`${grok.apiUrl}/v1/chat/completions`).pipe(
+          HttpClientRequest.acceptJson,
+          HttpClientRequest.bearerToken(grok.apiKey),
+          HttpClientRequest.bodyJsonUnsafe(payload),
         );
 
-        const response = yield* Effect.tryPromise({
-          try: () =>
-            fetchService.fetch(`${grok.apiUrl}/v1/chat/completions`, {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${grok.apiKey}`,
-              },
-              body: requestBody,
-            }),
-          catch: (error) => mapRequestError(error, "Failed to send the Grok request."),
-        });
+        const response = yield* httpClient
+          .execute(request)
+          .pipe(
+            catchProviderHttpError(
+              "grok",
+              "Failed to send the Grok request.",
+              (status: number) => `Grok returned HTTP ${status}.`,
+            ),
+          );
 
-        const bodyText = yield* Effect.tryPromise({
-          try: () => response.text(),
-          catch: (error) => mapRequestError(error, "Failed to read the Grok response body."),
-        });
-
-        if (!response.ok) {
-          return yield* new ProviderResponseError({
-            provider: "grok",
-            message: `Grok returned HTTP ${response.status}.`,
-            status: response.status,
-            body: bodyText,
-          });
-        }
-
-        return yield* decodeGrokChatCompletionResponse(bodyText).pipe(
-          Effect.mapError((error) =>
-            mapDecodeError(error, "Failed to decode the Grok response payload."),
-          ),
+        return yield* decodeJsonResponse(response, decodeGrokChatCompletionResponse, (error) =>
+          mapDecodeError(error, "Failed to decode the Grok response payload."),
         );
       });
 

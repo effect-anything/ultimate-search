@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { UltimateSearchConfig } from "../../config/settings";
 import { GrokProviderClient } from "../../providers/grok/client";
@@ -11,7 +11,13 @@ import { TavilyProviderClient } from "../../providers/tavily/client";
 import { DualSearch, DualSearchInput } from "../../services/dual-search";
 import { GrokSearch } from "../../services/grok-search";
 import { TavilySearch } from "../../services/tavily-search";
-import { CliOutput, outputFlag, renderJsonText } from "../../shared/output";
+import {
+  optionalChoiceFlag,
+  optionalIntegerFlag,
+  optionalTrimmedTextFlag,
+} from "../../shared/cli-flags";
+import { runCommandWithOutput } from "../../shared/command-output";
+import { outputFlag, renderJsonText } from "../../shared/output";
 import { trimmedNonEmptyStringSchema } from "../../shared/schema";
 
 const dualCommandLayer = DualSearch.layer.pipe(
@@ -21,21 +27,6 @@ const dualCommandLayer = DualSearch.layer.pipe(
   Layer.provideMerge(TavilyProviderClient.layer),
   Layer.provideMerge(UltimateSearchConfig.layer),
 );
-
-const optionalTrimmedTextFlag = (name: string, description: string) =>
-  Flag.optional(
-    Flag.string(name).pipe(Flag.withSchema(Schema.Trim), Flag.withDescription(description)),
-  ).pipe(Flag.map((value) => Option.filter(value, (text) => text.length > 0)));
-
-const optionalChoiceFlag = <A extends string>(
-  name: string,
-  choices: ReadonlyArray<A>,
-  description: string,
-) =>
-  Flag.optional(Flag.choice(name, choices)).pipe(
-    Flag.map((value) => Option.filter(value, () => true)),
-    Flag.withDescription(description),
-  );
 
 export const commandSearchDual = Command.make(
   "dual",
@@ -54,10 +45,9 @@ export const commandSearchDual = Command.make(
       TavilySearchDepthSchema.literals,
       "Optional Tavily search depth.",
     ),
-    maxResults: Flag.optional(
-      Flag.integer("max-results").pipe(
-        Flag.withDescription("Optional number of Tavily results to return."),
-      ),
+    maxResults: optionalIntegerFlag(
+      "max-results",
+      "Optional number of Tavily results to return.",
     ),
     topic: optionalChoiceFlag(
       "topic",
@@ -75,15 +65,18 @@ export const commandSearchDual = Command.make(
     output: outputFlag,
   },
   Effect.fn(function* (input) {
-    const request = yield* DualSearchInput.decodeEffect(input);
-    const dualSearch = yield* DualSearch;
-    const cliOutput = yield* CliOutput;
-    const result = yield* dualSearch.search(request);
+    yield* runCommandWithOutput(input.output, () =>
+      Effect.gen(function* () {
+        const request = yield* DualSearchInput.decodeEffect(input);
+        const dualSearch = yield* DualSearch;
+        const result = yield* dualSearch.search(request);
 
-    yield* cliOutput.writeOutput({
-      human: renderJsonText(result),
-      llm: result,
-    });
+        return {
+          human: renderJsonText(result),
+          llm: result,
+        };
+      }),
+    );
   }),
 ).pipe(
   Command.withDescription("Run Grok and Tavily search concurrently."),

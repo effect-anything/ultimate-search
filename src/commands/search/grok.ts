@@ -1,21 +1,18 @@
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { UltimateSearchConfig } from "../../config/settings";
 import { GrokProviderClient } from "../../providers/grok/client";
 import { GrokSearchInput, type GrokSearchResult } from "../../providers/grok/schema";
 import { GrokSearch } from "../../services/grok-search";
-import { CliOutput, outputFlag } from "../../shared/output";
+import { optionalTrimmedTextFlag } from "../../shared/cli-flags";
+import { runCommandWithOutput } from "../../shared/command-output";
+import { outputFlag } from "../../shared/output";
 import { trimmedNonEmptyStringSchema } from "../../shared/schema";
 
 const grokCommandLayer = GrokSearch.layer.pipe(
   Layer.provideMerge(GrokProviderClient.layer),
   Layer.provideMerge(UltimateSearchConfig.layer),
 );
-
-const optionalTrimmedTextFlag = (name: string, description: string) =>
-  Flag.optional(
-    Flag.string(name).pipe(Flag.withSchema(Schema.Trim), Flag.withDescription(description)),
-  ).pipe(Flag.map((value) => Option.filter(value, (text) => text.length > 0)));
 
 const renderHumanGrokResult = (result: GrokSearchResult) =>
   [
@@ -40,19 +37,22 @@ export const commandSearchGrok = Command.make(
     output: outputFlag,
   },
   Effect.fn(function* (input) {
-    const request = yield* GrokSearchInput.decodeEffect({
-      query: input.query,
-      platform: input.platform,
-      model: input.model,
-    });
-    const grokSearch = yield* GrokSearch;
-    const cliOutput = yield* CliOutput;
-    const result = yield* grokSearch.search(request);
+    yield* runCommandWithOutput(input.output, () =>
+      Effect.gen(function* () {
+        const request = yield* GrokSearchInput.decodeEffect({
+          query: input.query,
+          platform: input.platform,
+          model: input.model,
+        });
+        const grokSearch = yield* GrokSearch;
+        const result = yield* grokSearch.search(request);
 
-    yield* cliOutput.writeOutput({
-      human: renderHumanGrokResult(result),
-      llm: result,
-    });
+        return {
+          human: renderHumanGrokResult(result),
+          llm: result,
+        };
+      }),
+    );
   }),
 ).pipe(
   Command.withDescription("Run Grok-backed search."),

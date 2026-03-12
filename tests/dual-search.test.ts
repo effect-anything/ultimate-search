@@ -18,7 +18,18 @@ const makeInput = () =>
     includeAnswer: false,
   });
 
-it.layer(Layer.empty)((it) => {
+const testLayer = Layer.empty;
+
+const makeDualSearchMockLayer = (
+  grokLayer: Layer.Layer<any, any, any>,
+  tavilyLayer: Layer.Layer<any, any, any>,
+) =>
+  DualSearch.layer.pipe(
+    Layer.provideMerge(grokLayer),
+    Layer.provideMerge(tavilyLayer),
+  );
+
+it.layer(testLayer)((it) => {
   it.effect(
     "runs both provider branches concurrently",
     Effect.fn(function* () {
@@ -61,16 +72,13 @@ it.layer(Layer.empty)((it) => {
             }),
         }),
       );
-      const layer = DualSearch.layer.pipe(
-        Layer.provideMerge(grokLayer),
-        Layer.provideMerge(tavilyLayer),
-      );
+      const mockLayer = makeDualSearchMockLayer(grokLayer, tavilyLayer);
       const exit = yield* Effect.exit(
         Effect.gen(function* () {
           const dualSearch = yield* DualSearch;
 
           return yield* dualSearch.search(yield* makeInput()).pipe(Effect.timeout("1 second"));
-        }).pipe(Effect.provide(layer)),
+        }).pipe(Effect.provide(mockLayer)),
       );
 
       expect(Exit.isSuccess(exit)).toBe(true);
@@ -130,15 +138,12 @@ it.layer(Layer.empty)((it) => {
             }),
         }),
       );
-      const layer = DualSearch.layer.pipe(
-        Layer.provideMerge(grokLayer),
-        Layer.provideMerge(tavilyLayer),
-      );
+      const mockLayer = makeDualSearchMockLayer(grokLayer, tavilyLayer);
       const result = yield* Effect.gen(function* () {
         const dualSearch = yield* DualSearch;
 
         return yield* dualSearch.search(yield* makeInput());
-      }).pipe(Effect.provide(layer));
+      }).pipe(Effect.provide(mockLayer));
 
       expect(result).toEqual({
         grok: {

@@ -1,6 +1,5 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { spawn } from "node:child_process";
 import { Schema } from "effect";
 import PackageJson from "../package.json" with { type: "json" };
@@ -10,15 +9,26 @@ import { afterEach, expect, it } from "vitest";
 const expectedSearchTavilyText =
   '{"query":"FastAPI releases","answer":"Mocked Tavily answer","response_time":0.42,"results":[{"title":"FastAPI release notes","url":"https://fastapi.tiangolo.com/release-notes/","content":"Latest FastAPI release notes","score":0.98,"raw_content":null}]}';
 
-const decodeJson = <A>(text: string) =>
-  Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text) as A;
+const decodeUnknownJson = (text: string): unknown =>
+  Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const parseNdjson = (text: string) =>
   text
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((line) => decodeJson<Record<string, unknown>>(line));
+    .map((line) => {
+      const value = decodeUnknownJson(line);
+
+      if (!isRecord(value)) {
+        throw new Error("Expected an MCP JSON-RPC object response.");
+      }
+
+      return value;
+    });
 
 const startMockTavilyServer = async () => {
   const requests: Array<{
@@ -39,7 +49,7 @@ const startMockTavilyServer = async () => {
 
       requests.push({
         url,
-        body: decodeJson(bodyText),
+        body: decodeUnknownJson(bodyText),
       });
 
       if (req.method !== "POST" || url !== "/search") {
@@ -83,7 +93,7 @@ const startMockTavilyServer = async () => {
   return {
     requests,
     server,
-    url: `http://127.0.0.1:${(address as AddressInfo).port}`,
+    url: `http://127.0.0.1:${address.port}`,
   };
 };
 

@@ -11,7 +11,8 @@ import { FirecrawlFetch } from "../services/firecrawl-fetch";
 import { TavilyExtract } from "../services/tavily-extract";
 import { WebFetch } from "../services/web-fetch";
 import { WebFetchInput, type WebFetchResult } from "../services/web-fetch-schema";
-import { CliOutput, outputFlag } from "../shared/output";
+import { runCommandWithOutput } from "../shared/command-output";
+import { outputFlag } from "../shared/output";
 import { absoluteUrlStringSchema } from "../shared/schema";
 
 const fetchCommandLayer = WebFetch.layer.pipe(
@@ -68,19 +69,22 @@ export const commandFetch = Command.make(
     output: outputFlag,
   },
   Effect.fn(function* (input) {
-    const request = yield* WebFetchInput.decodeEffect({
-      urls: [input.url],
-      depth: input.depth,
-      format: input.format,
-    });
-    const webFetch = yield* WebFetch;
-    const cliOutput = yield* CliOutput;
-    const result = yield* webFetch.fetch(request);
+    yield* runCommandWithOutput(input.output, (mode) =>
+      Effect.gen(function* () {
+        const request = yield* WebFetchInput.decodeEffect({
+          urls: [input.url],
+          depth: input.depth,
+          format: input.format,
+        });
+        const webFetch = yield* WebFetch;
+        const result = yield* webFetch.fetch(request);
 
-    yield* cliOutput.writeOutput({
-      human: cliOutput.mode === "human" ? renderHumanFetchResult(result) : "",
-      llm: result,
-    });
+        return {
+          human: mode === "human" ? renderHumanFetchResult(result) : "",
+          llm: result,
+        };
+      }),
+    );
   }),
 ).pipe(
   Command.withDescription("Fetch and normalize page content from a URL."),

@@ -1,6 +1,6 @@
-import { Effect, Layer, Schema, ServiceMap } from "effect";
+import { Config, Effect, Layer, Logger, Option, Schema, ServiceMap } from "effect";
 import { Flag } from "effect/unstable/cli";
-import { writeStderr, writeStdout } from "../cli/io";
+import { writeStdout } from "../cli/io";
 import {
   ConfigValidationError,
   ProviderContentError,
@@ -17,27 +17,10 @@ export const OutputModeSchema = Schema.Literals(["human", "llm"] as const);
 export type OutputMode = typeof OutputModeSchema.Type;
 
 export const outputFlag = Flag.optional(
-  Flag.string("output").pipe(
-    Flag.mapTryCatch(
-      (value): OutputMode => {
-        if (value === "human" || value === "llm") {
-          return value;
-        }
-
-        throw new Error("invalid output mode");
-      },
-      () => "output must be either 'human' or 'llm'",
-    ),
+  Flag.choice("output", OutputModeSchema.literals).pipe(
     Flag.withDescription("Output mode: human for readable text, llm for structured JSON."),
   ),
 );
-
-type ProcessEnvLike = Readonly<Record<string, string | undefined>>;
-
-const getProcessEnv = (): ProcessEnvLike =>
-  "process" in globalThis && typeof globalThis.process === "object" && globalThis.process?.env
-    ? globalThis.process.env
-    : {};
 
 const trimTrailingWhitespace = (text: string) => text.trimEnd();
 
@@ -67,35 +50,23 @@ const configErrorDetails = (error: ConfigValidationError): Array<string> => {
 export const writeJsonStdout = (value: unknown) => writeStdout(stringify(value));
 export const renderJsonText = (value: unknown) => stringify(value);
 
-export const writeRenderedError = (error: unknown) =>
-  writeStderr(stringify({ error: renderStructuredError(error) }));
+const defaultOutputModeConfig = Config.string("AGENT").pipe(
+  Config.withDefault(""),
+  Config.map((agent): OutputMode => (agent.trim().length > 0 ? "llm" : "human")),
+);
 
-const resolveOutputModeFromArgs = (
-  args: ReadonlyArray<string>,
-  env: ProcessEnvLike = getProcessEnv(),
-): OutputMode => {
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+export const resolveOutputMode = (
+  selected: Option.Option<OutputMode>,
+  fallback: OutputMode,
+): OutputMode => Option.getOrElse(selected, () => fallback);
 
-    if (arg === "--output") {
-      const next = args[index + 1];
-      if (next === "human" || next === "llm") {
-        return next;
-      }
-      continue;
-    }
-
-    if (arg === "--output=human") {
-      return "human";
-    }
-
-    if (arg === "--output=llm") {
-      return "llm";
-    }
-  }
-
-  return env["AGENT"]?.trim() ? "llm" : "human";
-};
+const makeCliOutput = (defaultMode: OutputMode) =>
+  CliOutput.of({
+    defaultMode,
+    writeOutput: ({ human, llm }, mode = defaultMode) =>
+      mode === "llm" ? writeJsonStdout(llm) : writeStdout(human),
+    logError: (error, mode = defaultMode) => logCliError(error, mode),
+  });
 
 const renderHumanError = (error: unknown) => {
   if (error instanceof ConfigValidationError) {
@@ -148,50 +119,92 @@ const renderHumanError = (error: unknown) => {
   return `Unknown error\n${String(error)}`;
 };
 
-const notImplementedMessage = (commandPath: string) =>
-  `The '${commandPath}' command is not implemented yet.`;
+const cliErrorLogMessageTag = "UltimateSearchCliError";
 
-const renderHumanNotImplemented = (commandPath: string) =>
-  trimTrailingWhitespace(
-    [notImplementedMessage(commandPath), "Try '--help' to inspect the command surface."].join("\n"),
-  );
+interface CliErrorLogMessage {
+  readonly _tag: typeof cliErrorLogMessageTag;
+  readonly mode: OutputMode;
+  readonly error: unknown;
+}
+
+const isCliErrorLogMessage = (value: unknown): value is CliErrorLogMessage =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  value._tag === cliErrorLogMessageTag &&
+  "mode" in value &&
+  (value.mode === "human" || value.mode === "llm") &&
+  "error" in value;
+
+const normalizeLogMessage = (message: unknown): unknown =>
+  Array.isArray(message) && message.length === 1 ? message[0] : message;
+
+const renderGenericLogMessage = (message: unknown): string => {
+  const normalized = normalizeLogMessage(message);
+
+  if (Array.isArray(normalized)) {
+    return normalized.map((item) => renderGenericLogMessage(item)).join(" ");
+  }
+
+  if (typeof normalized === "string") {
+    return normalized;
+  }
+
+  if (normalized instanceof Error) {
+    return trimTrailingWhitespace([normalized.name, normalized.message].join("\n"));
+  }
+
+  try {
+    return stringify(normalized);
+  } catch {
+    return String(normalized);
+  }
+};
+
+const formatCliLogMessage = (message: unknown): string => {
+  const normalized = normalizeLogMessage(message);
+
+  if (isCliErrorLogMessage(normalized)) {
+    return normalized.mode === "llm"
+      ? stringify({ error: renderStructuredError(normalized.error) })
+      : renderHumanError(normalized.error);
+  }
+
+  return renderGenericLogMessage(normalized);
+};
+
+export const logCliError = (error: unknown, mode: OutputMode) =>
+  Effect.logError({
+    _tag: cliErrorLogMessageTag,
+    mode,
+    error,
+  } satisfies CliErrorLogMessage);
+
+const cliConsoleLogger = Logger.withConsoleError(
+  Logger.make((options) => formatCliLogMessage(options.message)),
+);
+
+export const cliLoggerLayer = Logger.layer([cliConsoleLogger, Logger.tracerLogger]);
 
 export class CliOutput extends ServiceMap.Service<
   CliOutput,
   {
-    readonly mode: OutputMode;
-    readonly writeOutput: (output: {
-      readonly human: string;
-      readonly llm: unknown;
-    }) => Effect.Effect<void>;
-    readonly writeError: (error: unknown) => Effect.Effect<void>;
-    readonly writeNotImplemented: (commandPath: string) => Effect.Effect<void>;
+    readonly defaultMode: OutputMode;
+    readonly writeOutput: (
+      output: {
+        readonly human: string;
+        readonly llm: unknown;
+      },
+      mode?: OutputMode,
+    ) => Effect.Effect<void>;
+    readonly logError: (error: unknown, mode?: OutputMode) => Effect.Effect<void>;
   }
 >()("CliOutput") {
-  static layerForArgs(args: ReadonlyArray<string>, env: ProcessEnvLike = getProcessEnv()) {
-    const mode = resolveOutputModeFromArgs(args, env);
+  static layer() {
+    return Layer.effect(CliOutput, Effect.map(defaultOutputModeConfig.asEffect(), makeCliOutput));
+  }
 
-    return Layer.succeed(
-      CliOutput,
-      CliOutput.of({
-        mode,
-        writeOutput: ({ human, llm }) =>
-          mode === "llm" ? writeJsonStdout(llm) : writeStdout(human),
-        writeError: (error) =>
-          mode === "llm" ? writeRenderedError(error) : writeStderr(renderHumanError(error)),
-        writeNotImplemented: (commandPath) =>
-          mode === "llm"
-            ? writeStderr(
-                stringify({
-                  error: {
-                    type: "NotImplemented",
-                    command: commandPath,
-                    message: notImplementedMessage(commandPath),
-                  },
-                }),
-              )
-            : writeStderr(renderHumanNotImplemented(commandPath)),
-      }),
-    );
+  static layerForMode(mode: OutputMode) {
+    return Layer.succeed(CliOutput, makeCliOutput(mode));
   }
 }

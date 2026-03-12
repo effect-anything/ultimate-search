@@ -13,14 +13,13 @@ import {
   Stdio,
   Terminal,
 } from "effect";
+import { HttpBody, HttpClient, HttpClientError, HttpClientResponse } from "effect/unstable/http";
 import { Command } from "effect/unstable/cli";
-import * as CliError from "effect/unstable/cli/CliError";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { expect } from "vitest";
 import PackageJson from "../package.json" with { type: "json" };
 import { commandRoot } from "../src/commands/root";
-import { FetchService } from "../src/shared/fetch";
-import { CliOutput } from "../src/shared/output";
+import { CliOutput, cliLoggerLayer } from "../src/shared/output";
 
 const textDecoder = new TextDecoder();
 
@@ -98,17 +97,20 @@ const makeHarness = () => {
   };
 };
 
-const commandRuntimeLayer = Layer.mergeAll(
-  Path.layer,
-  FileSystem.layerNoop({}),
-  Layer.succeed(Terminal.Terminal, {
+const terminalTestLayer = Layer.succeed(
+  Terminal.Terminal,
+  Terminal.make({
     columns: Effect.succeed(80),
-    rows: Effect.succeed(24),
-    isTTY: Effect.succeed(false),
     readInput: Effect.die("Terminal.readInput is not available in tests"),
     readLine: Effect.die("Terminal.readLine is not available in tests"),
     display: () => Effect.void,
-  } as unknown as Terminal.Terminal),
+  }),
+);
+
+const commandRuntimeLayer = Layer.mergeAll(
+  Path.layer,
+  FileSystem.layerNoop({}),
+  terminalTestLayer,
   Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make(() =>
@@ -117,52 +119,87 @@ const commandRuntimeLayer = Layer.mergeAll(
   ),
 );
 
-const renderNonCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.tapError((error) =>
-      CliError.isCliError(error)
-        ? Effect.void
-        : Effect.gen(function* () {
-            const cliOutput = yield* CliOutput;
-            yield* cliOutput.writeError(error);
+const testLayer = Layer.mergeAll(commandRuntimeLayer, cliLoggerLayer);
+
+const decodeRequestBody = (body: HttpBody.HttpBody): string => {
+  switch (body._tag) {
+    case "Empty":
+      return "";
+    case "Uint8Array":
+      return textDecoder.decode(body.body);
+    case "Raw":
+      return String(body.body);
+    default:
+      throw new Error(`Unsupported test request body: ${body._tag}`);
+  }
+};
+
+const decodeRequestJson = (request: { readonly body: HttpBody.HttpBody }) => {
+  const bodyText = decodeRequestBody(request.body);
+
+  return JSON.parse(bodyText.length > 0 ? bodyText : "{}");
+};
+
+const makeHttpClientLayer = (
+  handler: (request: {
+    readonly url: string;
+    readonly body: HttpBody.HttpBody;
+  }) => Response | Promise<Response>,
+) =>
+  Layer.succeed(
+    HttpClient.HttpClient,
+    HttpClient.make((request) =>
+      Effect.tryPromise({
+        try: async () => HttpClientResponse.fromWeb(request, await handler(request)),
+        catch: (cause) =>
+          new HttpClientError.HttpClientError({
+            reason: new HttpClientError.TransportError({
+              request,
+              cause,
+              description: cause instanceof Error ? cause.message : "Mock HTTP request failed.",
+            }),
           }),
+      }),
     ),
   );
 
-const unusedFetchLayer = Layer.succeed(
-  FetchService,
-  FetchService.of({
-    fetch: () => Promise.reject(new Error("fetch is not used in this test")),
-  }),
+const unusedHttpClientLayer = makeHttpClientLayer(() =>
+  Promise.reject(new Error("fetch is not used in this test")),
 );
 
 const runCli = (
   args: ReadonlyArray<string>,
-  layer: Layer.Layer<any, any, any>,
+  mockLayer: Layer.Layer<any, any, never>,
   env?: {
     readonly AGENT?: string | undefined;
   },
 ) =>
-  renderNonCliErrors(
-    Command.runWith(commandRoot, {
-      version: PackageJson.version,
-    })(args),
-  ).pipe(
+  Command.runWith(commandRoot, {
+    version: PackageJson.version,
+  })(args).pipe(
     Effect.provide(
-      Layer.merge(commandRuntimeLayer, Layer.merge(layer, CliOutput.layerForArgs(args, env))),
+      Layer.merge(mockLayer, CliOutput.layerForMode(env?.AGENT?.trim() ? "llm" : "human")),
     ),
   );
 
-const decodeJson = <A>(_schema: Schema.Top, text: string) =>
-  Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text) as A;
+type TestDecodeSchema<A> = Schema.Top & {
+  readonly Type: A;
+  readonly DecodingServices: never;
+};
 
-it.layer(Layer.empty)((it) => {
+const decodeJson = <A>(schema: TestDecodeSchema<A>, text: string): A => {
+  const unknownJson = Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text);
+
+  return Schema.decodeUnknownSync(schema)(unknownJson);
+};
+
+it.layer(testLayer)((it) => {
   it.effect(
     "renders root help with the top-level command tree",
     Effect.fn(function* () {
       const harness = makeHarness();
 
-      yield* runCli(["--help"], Layer.mergeAll(harness.layer, unusedFetchLayer));
+      yield* runCli(["--help"], Layer.mergeAll(harness.layer, unusedHttpClientLayer));
 
       const output = harness.consoleStdout.join("\n");
 
@@ -179,7 +216,7 @@ it.layer(Layer.empty)((it) => {
     Effect.fn(function* () {
       const harness = makeHarness();
 
-      yield* runCli(["search", "--help"], Layer.mergeAll(harness.layer, unusedFetchLayer));
+      yield* runCli(["search", "--help"], Layer.mergeAll(harness.layer, unusedHttpClientLayer));
 
       const output = harness.consoleStdout.join("\n");
 
@@ -194,12 +231,10 @@ it.layer(Layer.empty)((it) => {
     Effect.fn(function* () {
       const harness = makeHarness();
 
-      const layer = Layer.mergeAll(harness.layer, unusedFetchLayer);
+      const layer = Layer.mergeAll(harness.layer, unusedHttpClientLayer);
 
       const exit = yield* Effect.promise(() =>
-        Effect.runPromiseExit(
-          Effect.exit(runCli(["mcp", "stdio"], layer) as Effect.Effect<void, unknown, never>),
-        ),
+        Effect.runPromiseExit(Effect.exit(runCli(["mcp", "stdio"], layer))),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -217,42 +252,37 @@ it.layer(Layer.empty)((it) => {
       const harness = makeHarness();
       const requests: Array<string> = [];
       const requestBodies: Array<unknown> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input, init) => {
-            requests.push(String(input));
-            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        requests.push(request.url);
+        requestBodies.push(decodeRequestJson(request));
 
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  model: "grok-test",
-                  choices: [
-                    {
-                      message: {
-                        role: "assistant",
-                        content: "Mocked Grok answer",
-                      },
-                    },
-                  ],
-                  usage: {
-                    prompt_tokens: 12,
-                    completion_tokens: 34,
-                    total_tokens: 46,
-                  },
-                }),
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              model: "grok-test",
+              choices: [
                 {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
+                  message: {
+                    role: "assistant",
+                    content: "Mocked Grok answer",
                   },
                 },
-              ),
-            );
-          },
-        }),
-      );
+              ],
+              usage: {
+                prompt_tokens: 12,
+                completion_tokens: 34,
+                total_tokens: 46,
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        );
+      });
 
       const exit = yield* Effect.exit(
         runCli(
@@ -266,7 +296,7 @@ it.layer(Layer.empty)((it) => {
             "--model",
             "  grok-cli-override  ",
           ],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -310,43 +340,39 @@ it.layer(Layer.empty)((it) => {
     "switches grok success output to llm JSON when AGENT is set",
     Effect.fn(function* () {
       const harness = makeHarness();
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: () =>
-            Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  model: "grok-test",
-                  choices: [
-                    {
-                      message: {
-                        role: "assistant",
-                        content: "Mocked Grok answer",
-                      },
-                    },
-                  ],
-                  usage: {
-                    prompt_tokens: 12,
-                    completion_tokens: 34,
-                    total_tokens: 46,
-                  },
-                }),
+      const httpClientLayer = makeHttpClientLayer(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              model: "grok-test",
+              choices: [
                 {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
+                  message: {
+                    role: "assistant",
+                    content: "Mocked Grok answer",
                   },
                 },
-              ),
-            ),
-        }),
+              ],
+              usage: {
+                prompt_tokens: 12,
+                completion_tokens: 34,
+                total_tokens: 46,
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        ),
       );
 
       const exit = yield* Effect.exit(
         runCli(
           ["search", "grok", "--query", "release notes"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
           { AGENT: "codex" },
         ).pipe(
           Effect.provideService(
@@ -392,43 +418,39 @@ it.layer(Layer.empty)((it) => {
     "allows --output human to override AGENT-driven llm mode",
     Effect.fn(function* () {
       const harness = makeHarness();
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: () =>
-            Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  model: "grok-test",
-                  choices: [
-                    {
-                      message: {
-                        role: "assistant",
-                        content: "Mocked Grok answer",
-                      },
-                    },
-                  ],
-                  usage: {
-                    prompt_tokens: 12,
-                    completion_tokens: 34,
-                    total_tokens: 46,
-                  },
-                }),
+      const httpClientLayer = makeHttpClientLayer(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              model: "grok-test",
+              choices: [
                 {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
+                  message: {
+                    role: "assistant",
+                    content: "Mocked Grok answer",
                   },
                 },
-              ),
-            ),
-        }),
+              ],
+              usage: {
+                prompt_tokens: 12,
+                completion_tokens: 34,
+                total_tokens: 46,
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        ),
       );
 
       const exit = yield* Effect.exit(
         runCli(
           ["search", "grok", "--query", "release notes", "--output", "human"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
           { AGENT: "codex" },
         ).pipe(
           Effect.provideService(
@@ -458,7 +480,7 @@ it.layer(Layer.empty)((it) => {
       const exit = yield* Effect.exit(
         runCli(
           ["search", "grok", "--query", "release notes"],
-          Layer.mergeAll(harness.layer, unusedFetchLayer),
+          Layer.mergeAll(harness.layer, unusedHttpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -485,25 +507,21 @@ it.layer(Layer.empty)((it) => {
     "renders provider errors for grok search failures in llm mode when requested",
     Effect.fn(function* () {
       const harness = makeHarness();
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: () =>
-            Promise.resolve(
-              new Response("provider unavailable", {
-                status: 503,
-                headers: {
-                  "content-type": "text/plain",
-                },
-              }),
-            ),
-        }),
+      const httpClientLayer = makeHttpClientLayer(() =>
+        Promise.resolve(
+          new Response("provider unavailable", {
+            status: 503,
+            headers: {
+              "content-type": "text/plain",
+            },
+          }),
+        ),
       );
 
       const exit = yield* Effect.exit(
         runCli(
           ["search", "grok", "--query", "release notes", "--output", "llm"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -552,7 +570,7 @@ it.layer(Layer.empty)((it) => {
       const exit = yield* Effect.exit(
         runCli(
           ["search", "grok", "--query", "release notes"],
-          Layer.mergeAll(harness.layer, unusedFetchLayer),
+          Layer.mergeAll(harness.layer, unusedHttpClientLayer),
         ).pipe(
           Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
         ),
@@ -574,35 +592,30 @@ it.layer(Layer.empty)((it) => {
       const harness = makeHarness();
       const requests: Array<string> = [];
       const requestBodies: Array<unknown> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input, init) => {
-            requests.push(String(input));
-            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        requests.push(request.url);
+        requestBodies.push(decodeRequestJson(request));
 
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  results: [
-                    {
-                      url: "https://example.com/docs",
-                      title: "Example Docs",
-                      raw_content: "# Example\n\nTavily page content",
-                    },
-                  ],
-                }),
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              results: [
                 {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
-                  },
+                  url: "https://example.com/docs",
+                  title: "Example Docs",
+                  raw_content: "# Example\n\nTavily page content",
                 },
-              ),
-            );
-          },
-        }),
-      );
+              ],
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        );
+      });
 
       const exit = yield* Effect.exit(
         runCli(
@@ -617,7 +630,7 @@ it.layer(Layer.empty)((it) => {
             "--output",
             "llm",
           ],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -676,62 +689,57 @@ it.layer(Layer.empty)((it) => {
       const harness = makeHarness();
       const requests: Array<string> = [];
       const requestBodies: Array<unknown> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input, init) => {
-            requests.push(String(input));
-            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        requests.push(request.url);
+        requestBodies.push(decodeRequestJson(request));
 
-            if (String(input).includes("/extract")) {
-              return Promise.resolve(
-                new Response(
-                  JSON.stringify({
-                    results: [
-                      {
-                        url: "https://example.com/docs",
-                        title: "Example Docs",
-                        raw_content: null,
-                      },
-                    ],
-                  }),
+        if (request.url.includes("/extract")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                results: [
                   {
-                    status: 200,
-                    headers: {
-                      "content-type": "application/json",
-                    },
+                    url: "https://example.com/docs",
+                    title: "Example Docs",
+                    raw_content: null,
                   },
-                ),
-              );
-            }
-
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  success: true,
-                  data: {
-                    markdown: "FireCrawl page content",
-                    metadata: {
-                      title: "Fallback Title",
-                    },
-                  },
-                }),
-                {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
-                  },
+                ],
+              }),
+              {
+                status: 200,
+                headers: {
+                  "content-type": "application/json",
                 },
-              ),
-            );
-          },
-        }),
-      );
+              },
+            ),
+          );
+        }
+
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              success: true,
+              data: {
+                markdown: "FireCrawl page content",
+                metadata: {
+                  title: "Fallback Title",
+                },
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        );
+      });
 
       const exit = yield* Effect.exit(
         runCli(
           ["fetch", "--url", "https://example.com/docs", "--output", "llm"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -815,18 +823,16 @@ it.layer(Layer.empty)((it) => {
     Effect.fn(function* () {
       const harness = makeHarness();
       const calls: Array<string> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input) => {
-            calls.push(String(input));
-            return Promise.reject(new Error("fetch should not be called"));
-          },
-        }),
-      );
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        calls.push(request.url);
+        return Promise.reject(new Error("fetch should not be called"));
+      });
 
       const exit = yield* Effect.exit(
-        runCli(["fetch", "--url", "not-a-url"], Layer.mergeAll(harness.layer, fetchLayer)).pipe(
+        runCli(
+          ["fetch", "--url", "not-a-url"],
+          Layer.mergeAll(harness.layer, httpClientLayer),
+        ).pipe(
           Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
         ),
       );
@@ -844,40 +850,35 @@ it.layer(Layer.empty)((it) => {
       const harness = makeHarness();
       const requests: Array<string> = [];
       const requestBodies: Array<unknown> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input, init) => {
-            requests.push(String(input));
-            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        requests.push(request.url);
+        requestBodies.push(decodeRequestJson(request));
 
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  query: "FastAPI releases",
-                  answer: "Mocked Tavily answer",
-                  response_time: 0.42,
-                  results: [
-                    {
-                      title: "FastAPI release notes",
-                      url: "https://fastapi.tiangolo.com/release-notes/",
-                      content: "Latest FastAPI release notes",
-                      score: 0.98,
-                      raw_content: null,
-                    },
-                  ],
-                }),
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              query: "FastAPI releases",
+              answer: "Mocked Tavily answer",
+              response_time: 0.42,
+              results: [
                 {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
-                  },
+                  title: "FastAPI release notes",
+                  url: "https://fastapi.tiangolo.com/release-notes/",
+                  content: "Latest FastAPI release notes",
+                  score: 0.98,
+                  raw_content: null,
                 },
-              ),
-            );
-          },
-        }),
-      );
+              ],
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        );
+      });
 
       const exit = yield* Effect.exit(
         runCli(
@@ -898,7 +899,7 @@ it.layer(Layer.empty)((it) => {
             "--output",
             "llm",
           ],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -966,42 +967,37 @@ it.layer(Layer.empty)((it) => {
       const harness = makeHarness();
       const requests: Array<string> = [];
       const requestBodies: Array<unknown> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input, init) => {
-            requests.push(String(input));
-            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        requests.push(request.url);
+        requestBodies.push(decodeRequestJson(request));
 
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  model: "grok-test",
-                  choices: [
-                    {
-                      message: {
-                        role: "assistant",
-                        content: "Mocked Grok answer",
-                      },
-                    },
-                  ],
-                  usage: {
-                    prompt_tokens: 12,
-                    completion_tokens: 34,
-                    total_tokens: 46,
-                  },
-                }),
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              model: "grok-test",
+              choices: [
                 {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
+                  message: {
+                    role: "assistant",
+                    content: "Mocked Grok answer",
                   },
                 },
-              ),
-            );
-          },
-        }),
-      );
+              ],
+              usage: {
+                prompt_tokens: 12,
+                completion_tokens: 34,
+                total_tokens: 46,
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        );
+      });
 
       const exit = yield* Effect.exit(
         runCli(
@@ -1015,7 +1011,7 @@ it.layer(Layer.empty)((it) => {
             "--output",
             "llm",
           ],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -1079,25 +1075,21 @@ it.layer(Layer.empty)((it) => {
     "renders provider errors for tavily search failures",
     Effect.fn(function* () {
       const harness = makeHarness();
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: () =>
-            Promise.resolve(
-              new Response("tavily overloaded", {
-                status: 503,
-                headers: {
-                  "content-type": "text/plain",
-                },
-              }),
-            ),
-        }),
+      const httpClientLayer = makeHttpClientLayer(() =>
+        Promise.resolve(
+          new Response("tavily overloaded", {
+            status: 503,
+            headers: {
+              "content-type": "text/plain",
+            },
+          }),
+        ),
       );
 
       const exit = yield* Effect.exit(
         runCli(
           ["search", "tavily", "--query", "release notes", "--output", "llm"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
           { AGENT: "codex" },
         ).pipe(
           Effect.provideService(
@@ -1147,7 +1139,7 @@ it.layer(Layer.empty)((it) => {
       const exit = yield* Effect.exit(
         runCli(
           ["search", "tavily", "--query", "release notes", "--output", "llm"],
-          Layer.mergeAll(harness.layer, unusedFetchLayer),
+          Layer.mergeAll(harness.layer, unusedHttpClientLayer),
           { AGENT: "codex" },
         ).pipe(
           Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
@@ -1188,37 +1180,32 @@ it.layer(Layer.empty)((it) => {
       const harness = makeHarness();
       const requests: Array<string> = [];
       const requestBodies: Array<unknown> = [];
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: (input, init) => {
-            requests.push(String(input));
-            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+      const httpClientLayer = makeHttpClientLayer((request) => {
+        requests.push(request.url);
+        requestBodies.push(decodeRequestJson(request));
 
-            return Promise.resolve(
-              new Response(
-                JSON.stringify({
-                  base_url: "https://fastapi.tiangolo.com",
-                  response_time: 0.18,
-                  results: [
-                    "https://fastapi.tiangolo.com/docs",
-                    "https://fastapi.tiangolo.com/release-notes",
-                  ],
-                  usage: {
-                    credits_used: 2,
-                  },
-                }),
-                {
-                  status: 200,
-                  headers: {
-                    "content-type": "application/json",
-                  },
-                },
-              ),
-            );
-          },
-        }),
-      );
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              base_url: "https://fastapi.tiangolo.com",
+              response_time: 0.18,
+              results: [
+                "https://fastapi.tiangolo.com/docs",
+                "https://fastapi.tiangolo.com/release-notes",
+              ],
+              usage: {
+                credits_used: 2,
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+              },
+            },
+          ),
+        );
+      });
 
       const exit = yield* Effect.exit(
         runCli(
@@ -1237,7 +1224,7 @@ it.layer(Layer.empty)((it) => {
             "--output",
             "llm",
           ],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -1294,20 +1281,15 @@ it.layer(Layer.empty)((it) => {
     Effect.fn(function* () {
       const harness = makeHarness();
       let fetchCalls = 0;
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: () => {
-            fetchCalls += 1;
-            return Promise.reject(new Error("fetch should not be called"));
-          },
-        }),
-      );
+      const httpClientLayer = makeHttpClientLayer(() => {
+        fetchCalls += 1;
+        return Promise.reject(new Error("fetch should not be called"));
+      });
 
       const exit = yield* Effect.exit(
         runCli(
           ["map", "--url", "https://fastapi.tiangolo.com", "--depth", "0", "--output", "llm"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -1334,25 +1316,21 @@ it.layer(Layer.empty)((it) => {
     "renders provider errors for tavily map failures in llm mode",
     Effect.fn(function* () {
       const harness = makeHarness();
-      const fetchLayer = Layer.succeed(
-        FetchService,
-        FetchService.of({
-          fetch: () =>
-            Promise.resolve(
-              new Response("map unavailable", {
-                status: 503,
-                headers: {
-                  "content-type": "text/plain",
-                },
-              }),
-            ),
-        }),
+      const httpClientLayer = makeHttpClientLayer(() =>
+        Promise.resolve(
+          new Response("map unavailable", {
+            status: 503,
+            headers: {
+              "content-type": "text/plain",
+            },
+          }),
+        ),
       );
 
       const exit = yield* Effect.exit(
         runCli(
           ["map", "--url", "https://fastapi.tiangolo.com", "--output", "llm"],
-          Layer.mergeAll(harness.layer, fetchLayer),
+          Layer.mergeAll(harness.layer, httpClientLayer),
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,

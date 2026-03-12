@@ -1,4 +1,4 @@
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { UltimateSearchConfig } from "../../config/settings";
 import {
@@ -10,23 +10,15 @@ import {
 } from "../../providers/tavily/schema";
 import { TavilyProviderClient } from "../../providers/tavily/client";
 import { TavilySearch } from "../../services/tavily-search";
-import { CliOutput, outputFlag } from "../../shared/output";
+import { optionalChoiceFlag, optionalIntegerFlag } from "../../shared/cli-flags";
+import { runCommandWithOutput } from "../../shared/command-output";
+import { outputFlag } from "../../shared/output";
 import { trimmedNonEmptyStringSchema } from "../../shared/schema";
 
 const tavilyCommandLayer = TavilySearch.layer.pipe(
   Layer.provideMerge(TavilyProviderClient.layer),
   Layer.provideMerge(UltimateSearchConfig.layer),
 );
-
-const optionalChoiceFlag = <A extends string>(
-  name: string,
-  choices: ReadonlyArray<A>,
-  description: string,
-) =>
-  Flag.optional(Flag.choice(name, choices)).pipe(
-    Flag.map((value) => Option.filter(value, () => true)),
-    Flag.withDescription(description),
-  );
 
 const renderHumanTavilyResult = (result: TavilySearchResponse) => {
   const lines: Array<string> = [];
@@ -64,10 +56,9 @@ export const commandSearchTavily = Command.make(
       TavilySearchDepthSchema.literals,
       "Optional Tavily search depth.",
     ),
-    maxResults: Flag.optional(
-      Flag.integer("max-results").pipe(
-        Flag.withDescription("Optional number of Tavily results to return."),
-      ),
+    maxResults: optionalIntegerFlag(
+      "max-results",
+      "Optional number of Tavily results to return.",
     ),
     topic: optionalChoiceFlag(
       "topic",
@@ -85,15 +76,18 @@ export const commandSearchTavily = Command.make(
     output: outputFlag,
   },
   Effect.fn(function* (input) {
-    const request = yield* TavilySearchInput.decodeEffect(input);
-    const tavilySearch = yield* TavilySearch;
-    const cliOutput = yield* CliOutput;
-    const result = yield* tavilySearch.search(request);
+    yield* runCommandWithOutput(input.output, (mode) =>
+      Effect.gen(function* () {
+        const request = yield* TavilySearchInput.decodeEffect(input);
+        const tavilySearch = yield* TavilySearch;
+        const result = yield* tavilySearch.search(request);
 
-    yield* cliOutput.writeOutput({
-      human: cliOutput.mode === "human" ? renderHumanTavilyResult(result) : "",
-      llm: result,
-    });
+        return {
+          human: mode === "human" ? renderHumanTavilyResult(result) : "",
+          llm: result,
+        };
+      }),
+    );
   }),
 ).pipe(
   Command.withDescription("Run Tavily-backed search."),
