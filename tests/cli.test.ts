@@ -452,4 +452,229 @@ it.layer(Layer.empty)((it) => {
       });
     }),
   );
+
+  it.effect(
+    "runs tavily search with mocked provider success and option handling",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const requests: Array<string> = [];
+      const requestBodies: Array<unknown> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input, init) => {
+            requests.push(String(input));
+            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  query: "FastAPI releases",
+                  answer: "Mocked Tavily answer",
+                  response_time: 0.42,
+                  results: [
+                    {
+                      title: "FastAPI release notes",
+                      url: "https://fastapi.tiangolo.com/release-notes/",
+                      content: "Latest FastAPI release notes",
+                      score: 0.98,
+                      raw_content: null,
+                    },
+                  ],
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            );
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          [
+            "search",
+            "tavily",
+            "--query",
+            "  FastAPI releases  ",
+            "--depth",
+            "advanced",
+            "--max-results",
+            "3",
+            "--topic",
+            "news",
+            "--time-range",
+            "week",
+            "--include-answer",
+          ],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: " https://tavily.example.com/ ",
+                TAVILY_API_KEY: "tavily-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(requests).toEqual(["https://tavily.example.com/search"]);
+      expect(requestBodies).toEqual([
+        {
+          query: "FastAPI releases",
+          search_depth: "advanced",
+          max_results: 3,
+          topic: "news",
+          time_range: "week",
+          include_answer: true,
+        },
+      ]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            query: Schema.String,
+            answer: Schema.NullOr(Schema.String),
+            response_time: Schema.Number,
+            results: Schema.Array(
+              Schema.Struct({
+                title: Schema.String,
+                url: Schema.String,
+                content: Schema.String,
+                score: Schema.Number,
+                raw_content: Schema.NullOr(Schema.String),
+              }),
+            ),
+          }),
+          harness.consoleStdout.join("\n"),
+        ),
+      ).toEqual({
+        query: "FastAPI releases",
+        answer: "Mocked Tavily answer",
+        response_time: 0.42,
+        results: [
+          {
+            title: "FastAPI release notes",
+            url: "https://fastapi.tiangolo.com/release-notes/",
+            content: "Latest FastAPI release notes",
+            score: 0.98,
+            raw_content: null,
+          },
+        ],
+      });
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "renders provider errors for tavily search failures",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: () =>
+            Promise.resolve(
+              new Response("tavily overloaded", {
+                status: 503,
+                headers: {
+                  "content-type": "text/plain",
+                },
+              }),
+            ),
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "tavily", "--query", "release notes"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: "https://tavily.example.com",
+                TAVILY_API_KEY: "tavily-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(harness.consoleStdout).toEqual([]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            error: Schema.Struct({
+              type: Schema.String,
+              provider: Schema.String,
+              message: Schema.String,
+              status: Schema.Number,
+              body: Schema.String,
+            }),
+          }),
+          harness.consoleStderr.join("\n"),
+        ),
+      ).toEqual({
+        error: {
+          type: "ProviderResponseError",
+          provider: "tavily",
+          message: "Tavily returned HTTP 503.",
+          status: 503,
+          body: "tavily overloaded",
+        },
+      });
+    }),
+  );
+
+  it.effect(
+    "renders config validation errors for missing tavily settings",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "tavily", "--query", "release notes"],
+          Layer.mergeAll(harness.layer, unusedFetchLayer),
+        ).pipe(
+          Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(harness.consoleStdout).toEqual([]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            error: Schema.Struct({
+              type: Schema.String,
+              provider: Schema.String,
+              message: Schema.String,
+              details: Schema.Array(Schema.String),
+            }),
+          }),
+          harness.consoleStderr.join("\n"),
+        ),
+      ).toEqual({
+        error: {
+          type: "ConfigValidationError",
+          provider: "tavily",
+          message: "Missing required Tavily configuration.",
+          details: [
+            "Set TAVILY_API_URL to the Tavily or Tavily proxy base URL.",
+            "Set TAVILY_API_KEY to the Tavily or Tavily proxy bearer token.",
+          ],
+        },
+      });
+    }),
+  );
 });

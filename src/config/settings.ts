@@ -32,11 +32,17 @@ export interface GrokProviderConfig {
   readonly model: string;
 }
 
+export interface TavilyProviderConfig {
+  readonly apiUrl: string;
+  readonly apiKey: string;
+}
+
 export class UltimateSearchConfig extends ServiceMap.Service<
   UltimateSearchConfig,
   {
     readonly settings: UltimateSearchSettings;
     readonly getGrokConfig: () => Effect.Effect<GrokProviderConfig, UltimateSearchError>;
+    readonly getTavilyConfig: () => Effect.Effect<TavilyProviderConfig, UltimateSearchError>;
   }
 >()("UltimateSearchConfig") {
   static readonly layer = Layer.effect(
@@ -50,6 +56,7 @@ export class UltimateSearchConfig extends ServiceMap.Service<
               new ConfigValidationError({
                 provider: "shared",
                 message: "Failed to load CLI configuration.",
+                details: [error instanceof Error ? error.message : String(error)],
                 cause: error,
               }),
           ),
@@ -84,9 +91,37 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         } satisfies GrokProviderConfig;
       });
 
+      const getTavilyConfig: UltimateSearchConfig.Methods["getTavilyConfig"] = Effect.fn(
+        "UltimateSearchConfig.getTavilyConfig",
+      )(function* (): Effect.fn.Return<TavilyProviderConfig, ConfigValidationError, never> {
+        const details: Array<string> = [];
+
+        if (Option.isNone(settings.tavily.apiUrl)) {
+          details.push("Set TAVILY_API_URL to the Tavily or Tavily proxy base URL.");
+        }
+
+        if (Option.isNone(settings.tavily.apiKey)) {
+          details.push("Set TAVILY_API_KEY to the Tavily or Tavily proxy bearer token.");
+        }
+
+        if (details.length > 0) {
+          return yield* new ConfigValidationError({
+            provider: "tavily",
+            message: "Missing required Tavily configuration.",
+            details,
+          });
+        }
+
+        return {
+          apiUrl: Option.getOrElse(settings.tavily.apiUrl, () => ""),
+          apiKey: Option.getOrElse(settings.tavily.apiKey, () => ""),
+        } satisfies TavilyProviderConfig;
+      });
+
       return UltimateSearchConfig.of({
         settings,
         getGrokConfig,
+        getTavilyConfig,
       });
     }),
   );

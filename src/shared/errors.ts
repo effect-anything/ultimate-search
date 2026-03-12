@@ -7,6 +7,7 @@ export class ConfigValidationError extends Schema.TaggedErrorClass<ConfigValidat
   {
     provider: SearchProvider,
     message: Schema.String,
+    details: Schema.optional(Schema.Array(Schema.String)),
     cause: Schema.optional(Schema.Unknown),
   },
 ) {}
