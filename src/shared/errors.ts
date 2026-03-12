@@ -1,37 +1,43 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export type SearchProvider = "shared" | "grok" | "tavily" | "firecrawl";
+export const SearchProvider = Schema.Literals(["shared", "grok", "tavily", "firecrawl"]);
 
-export class ConfigValidationError extends Data.TaggedError(
+export class ConfigValidationError extends Schema.TaggedErrorClass<ConfigValidationError>()(
   "ConfigValidationError",
-)<{
-  readonly provider: SearchProvider;
-  readonly message: string;
-  readonly details: ReadonlyArray<string>;
-}> {}
+  {
+    provider: SearchProvider,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
 
-export class ProviderRequestError extends Data.TaggedError(
+export class ProviderRequestError extends Schema.TaggedErrorClass<ProviderRequestError>()(
   "ProviderRequestError",
-)<{
-  readonly provider: SearchProvider;
-  readonly message: string;
-}> {}
+  {
+    provider: SearchProvider,
+    message: Schema.String,
+  },
+) {}
 
-export class ProviderResponseError extends Data.TaggedError(
+export class ProviderResponseError extends Schema.TaggedErrorClass<ProviderResponseError>()(
   "ProviderResponseError",
-)<{
-  readonly provider: SearchProvider;
-  readonly message: string;
-  readonly status: number;
-  readonly body: string;
-}> {}
+  {
+    provider: SearchProvider,
+    message: Schema.String,
+    status: Schema.Number,
+    body: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
 
-export class ProviderDecodeError extends Data.TaggedError(
+export class ProviderDecodeError extends Schema.TaggedErrorClass<ProviderDecodeError>()(
   "ProviderDecodeError",
-)<{
-  readonly provider: SearchProvider;
-  readonly message: string;
-}> {}
+  {
+    provider: SearchProvider,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {}
 
 export type UltimateSearchError =
   | ConfigValidationError

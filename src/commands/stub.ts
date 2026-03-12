@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { writeStderr } from "../cli/io.ts";
+import { writeStderr } from "../cli/io";
 
 const notImplementedMessage = (commandPath: string) =>
   `The '${commandPath}' command is not implemented yet.`;

@@ -2,7 +2,23 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": null,
   "categories": {},
-  "rules": {},
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test/**"],
+      "plugins": ["vitest"],
+      "rules": {
+        "vitest/consistent-each-for": "warn",
+        "vitest/hoisted-apis-on-top": "warn",
+        "vitest/no-conditional-tests": "warn",
+        "vitest/require-local-test-context-for-concurrent-snapshots": "warn"
+      }
+    }
+  ],
+  "rules": {
+    "import/namespace": "off",
+    "import/no-unassigned-import": "off",
+    "require-yield": "off"
+  },
   "settings": {
     "jsx-a11y": {
       "polymorphicPropName": null,

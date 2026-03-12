@@ -1,10 +1,10 @@
-import { writeStderr, writeStdout } from "../cli/io.ts";
+import { writeStderr, writeStdout } from "../cli/io";
 import {
   ConfigValidationError,
   ProviderDecodeError,
   ProviderRequestError,
   ProviderResponseError,
-} from "./errors.ts";
+} from "./errors";
 
 const stringify = (value: unknown) => JSON.stringify(value, null, 2);
 

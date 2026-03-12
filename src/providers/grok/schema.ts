@@ -1,4 +1,5 @@
 import { Option, Schema } from "effect";
+import { trimmedNonEmptyStringSchema } from "../../shared/schema";
 
 export const GrokUsageSchema = Schema.Struct({
   prompt_tokens: Schema.Number,
@@ -37,10 +38,12 @@ export const GrokChatCompletionResponseSchema = Schema.Struct({
 export type GrokChatCompletionResponse =
   typeof GrokChatCompletionResponseSchema.Type;
 
-export interface GrokSearchInput {
-  readonly query: string;
-  readonly platform: Option.Option<string>;
-  readonly model: Option.Option<string>;
+export class GrokSearchInput extends Schema.Class<GrokSearchInput>("GrokSearchInput")({
+  query: trimmedNonEmptyStringSchema("query must be a non-empty string"),
+  platform: Schema.Option(Schema.NonEmptyString),
+  model: Schema.Option(Schema.NonEmptyString),
+}) {
+  static decodeEffect = Schema.decodeUnknownEffect(GrokSearchInput)
 }
 
 export interface GrokSearchResult {
@@ -48,15 +51,6 @@ export interface GrokSearchResult {
   readonly model: string;
   readonly usage: GrokUsage;
 }
-
-const normalizeOptionalText = (value: Option.Option<string>) =>
-  Option.flatMap(value, (text) => {
-    const trimmed = text.trim();
-
-    return trimmed.length === 0
-      ? Option.none<string>()
-      : Option.some(trimmed);
-  });
 
 const timeSensitivePattern =
   /今天|最新|当前|latest|recent|today|current|now|这几天|本周|本月|近期|最近/iu;
@@ -107,13 +101,3 @@ export const buildGrokUserMessage = (input: GrokSearchInput) => {
 You should focus on these platform: ${platform}`,
   });
 };
-
-export const normalizeGrokSearchInput = (
-  query: string,
-  platform: Option.Option<string>,
-  model: Option.Option<string>,
-): GrokSearchInput => ({
-  query: query.trim(),
-  platform: normalizeOptionalText(platform),
-  model: normalizeOptionalText(model),
-});

@@ -1,63 +1,47 @@
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import {
-  UltimateSearchConfig,
-  UltimateSearchConfigLive,
-} from "../../config/settings.ts";
-import { ConfigValidationError } from "../../shared/errors.ts";
-import { writeJsonStdout } from "../../shared/output.ts";
-import {
-  GrokProviderClient,
-  GrokProviderClientLive,
-} from "../../providers/grok/client.ts";
-import { normalizeGrokSearchInput } from "../../providers/grok/schema.ts";
-import { GrokSearch, GrokSearchLive } from "../../services/grok-search.ts";
+import { UltimateSearchConfig } from "../../config/settings";
+import { GrokProviderClient } from "../../providers/grok/client";
+import { GrokSearchInput } from "../../providers/grok/schema";
+import { GrokSearch } from "../../services/grok-search";
+import { writeJsonStdout } from "../../shared/output";
+import { trimmedNonEmptyStringSchema } from "../../shared/schema";
 
-const grokCommandLayer = Layer.mergeAll(
-  Layer.effect(UltimateSearchConfig, UltimateSearchConfigLive),
-  Layer.succeed(GrokProviderClient, GrokProviderClientLive),
-  Layer.succeed(GrokSearch, GrokSearchLive),
+const grokCommandLayer = GrokSearch.layer.pipe(
+  Layer.provideMerge(GrokProviderClient.layer),
+  Layer.provideMerge(UltimateSearchConfig.layer),
 );
+
+const optionalTrimmedTextFlag = (name: string, description: string) =>
+  Flag.optional(
+    Flag.string(name).pipe(Flag.withSchema(Schema.Trim), Flag.withDescription(description)),
+  ).pipe(Flag.map((value) => Option.filter(value, (text) => text.length > 0)));
 
 export const commandSearchGrok = Command.make(
   "grok",
   {
     query: Flag.string("query").pipe(
+      Flag.withSchema(trimmedNonEmptyStringSchema("query must be a non-empty string")),
       Flag.withDescription("Search query to send to Grok."),
     ),
-    platform: Flag.optional(Flag.string("platform")).pipe(
-      Flag.withDescription("Optional platform focus such as GitHub or Reddit."),
+    platform: optionalTrimmedTextFlag(
+      "platform",
+      "Optional platform focus such as GitHub or Reddit.",
     ),
-    model: Flag.optional(Flag.string("model")).pipe(
-      Flag.withDescription("Override the configured Grok model."),
-    ),
+    model: optionalTrimmedTextFlag("model", "Override the configured Grok model."),
   },
-  (input) =>
-    Effect.gen(function* () {
-      const request = normalizeGrokSearchInput(
-        input.query,
-        input.platform,
-        input.model,
-      );
+  Effect.fn(function* (input) {
+    const request = yield* GrokSearchInput.decodeEffect(input);
+    const grokSearch = yield* GrokSearch;
+    const result = yield* grokSearch.search(request);
 
-      if (request.query.length === 0) {
-        return yield* new ConfigValidationError({
-          provider: "grok",
-          message: "Invalid CLI input.",
-          details: ["--query must be a non-empty string."],
-        });
-      }
-
-      const grokSearch = yield* GrokSearch;
-      const result = yield* grokSearch.search(request);
-
-      yield* writeJsonStdout(result);
-    }),
+    yield* writeJsonStdout(result);
+  }),
 ).pipe(
   Command.withDescription("Run Grok-backed search."),
   Command.withExamples([
     {
-      command: "ultimate-search search grok --query \"FastAPI latest features\"",
+      command: 'ultimate-search search grok --query "FastAPI latest features"',
       description: "Run a Grok-backed web search with the configured model.",
     },
   ]),

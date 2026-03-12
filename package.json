@@ -11,7 +11,8 @@
   "scripts": {
     "prepare": "husky && effect-language-service patch",
     "test": "vitest --silent 'passed-only'",
-    "check": "concurrently \"oxlint\" \"tsgo --noEmit\" \"bun run test --watch false\" \"effect-language-service diagnostics --project tsconfig.json\"",
+    "madge": "madge --circular --ts-config ./tsconfig.json --no-color --no-spinner --extensions 'ts,tsx' ./src",
+    "check": "concurrently \"oxlint\" \"tsgo --noEmit\" \"bun run test --watch false\" \"bun run madge\" \"effect-language-service diagnostics --project tsconfig.json\"",
     "fix": "concurrently \"oxlint --fix\" \"oxfmt\"",
     "build": "bun build --compile --production --sourcemap=inline --outfile=./dist/cli ./src/cli.ts",
     "prepublishOnly": "bun build"
@@ -26,6 +27,7 @@
     "effect": "4.0.0-beta.31",
     "husky": "^9.1.7",
     "lint-staged": "^16.3.3",
+    "madge": "^8.0.0",
     "oxfmt": "^0.38.0",
     "oxlint": "^1.53.0",
     "typescript": "^5.9.3"

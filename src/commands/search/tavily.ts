@@ -1,5 +1,5 @@
 import { Command } from "effect/unstable/cli";
-import { makeStubHandler } from "../stub.ts";
+import { makeStubHandler } from "../stub";
 
 export const commandSearchTavily = Command.make("tavily").pipe(
   Command.withDescription("Run Tavily-backed search."),

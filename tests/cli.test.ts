@@ -17,9 +17,9 @@ import * as CliError from "effect/unstable/cli/CliError";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { expect } from "vitest";
 import PackageJson from "../package.json" with { type: "json" };
-import { commandRoot } from "../src/commands/root.ts";
-import { FetchService } from "../src/shared/fetch.ts";
-import { writeRenderedError } from "../src/shared/output.ts";
+import { commandRoot } from "../src/commands/root";
+import { FetchService } from "../src/shared/fetch";
+import { writeRenderedError } from "../src/shared/output";
 
 const textDecoder = new TextDecoder();
 
@@ -70,10 +70,9 @@ const makeTestConsole = (stdout: Array<string>, stderr: Array<string>): Console.
 const captureChunk = (buffer: Array<string>) =>
   Sink.forEach((chunk: string | Uint8Array) =>
     Effect.sync(() => {
-      buffer.push(
-        typeof chunk === "string" ? chunk : textDecoder.decode(chunk),
-      );
-    }));
+      buffer.push(typeof chunk === "string" ? chunk : textDecoder.decode(chunk));
+    }),
+  );
 
 const makeHarness = () => {
   const consoleStdout: Array<string> = [];
@@ -101,17 +100,14 @@ const makeHarness = () => {
 const commandRuntimeLayer = Layer.mergeAll(
   Path.layer,
   FileSystem.layerNoop({}),
-  Layer.succeed(
-    Terminal.Terminal,
-    {
-      columns: Effect.succeed(80),
-      rows: Effect.succeed(24),
-      isTTY: Effect.succeed(false),
-      readInput: Effect.die("Terminal.readInput is not available in tests"),
-      readLine: Effect.die("Terminal.readLine is not available in tests"),
-      display: () => Effect.void,
-    } as unknown as Terminal.Terminal,
-  ),
+  Layer.succeed(Terminal.Terminal, {
+    columns: Effect.succeed(80),
+    rows: Effect.succeed(24),
+    isTTY: Effect.succeed(false),
+    readInput: Effect.die("Terminal.readInput is not available in tests"),
+    readLine: Effect.die("Terminal.readLine is not available in tests"),
+    display: () => Effect.void,
+  } as unknown as Terminal.Terminal),
   Layer.succeed(
     ChildProcessSpawner.ChildProcessSpawner,
     ChildProcessSpawner.make(() =>
@@ -123,7 +119,8 @@ const commandRuntimeLayer = Layer.mergeAll(
 const renderNonCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
     Effect.tapError((error) =>
-      CliError.isCliError(error) ? Effect.void : writeRenderedError(error)),
+      CliError.isCliError(error) ? Effect.void : writeRenderedError(error),
+    ),
   );
 
 const unusedFetchLayer = Layer.succeed(
@@ -133,10 +130,7 @@ const unusedFetchLayer = Layer.succeed(
   }),
 );
 
-const runCli = (
-  args: ReadonlyArray<string>,
-  layer: Layer.Layer<any, any, any>,
-) =>
+const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<any, any, any>) =>
   renderNonCliErrors(
     Command.runWith(commandRoot, {
       version: PackageJson.version,
@@ -147,14 +141,12 @@ const decodeJson = <A>(_schema: Schema.Top, text: string) =>
   Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text) as A;
 
 it.layer(Layer.empty)((it) => {
-  it.effect("renders root help with the top-level command tree", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "renders root help with the top-level command tree",
+    Effect.fn(function* () {
       const harness = makeHarness();
 
-      yield* runCli(
-        ["--help"],
-        Layer.mergeAll(harness.layer, unusedFetchLayer),
-      );
+      yield* runCli(["--help"], Layer.mergeAll(harness.layer, unusedFetchLayer));
 
       const output = harness.consoleStdout.join("\n");
 
@@ -163,26 +155,27 @@ it.layer(Layer.empty)((it) => {
       expect(output).toContain("fetch");
       expect(output).toContain("map");
       expect(output).toContain("mcp");
-    }));
+    }),
+  );
 
-  it.effect("renders nested search help with provider stubs", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "renders nested search help with provider stubs",
+    Effect.fn(function* () {
       const harness = makeHarness();
 
-      yield* runCli(
-        ["search", "--help"],
-        Layer.mergeAll(harness.layer, unusedFetchLayer),
-      );
+      yield* runCli(["search", "--help"], Layer.mergeAll(harness.layer, unusedFetchLayer));
 
       const output = harness.consoleStdout.join("\n");
 
       expect(output).toContain("grok");
       expect(output).toContain("tavily");
       expect(output).toContain("dual");
-    }));
+    }),
+  );
 
-  it.effect("writes stub notices to stderr for provider commands", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "writes stub notices to stderr for provider commands",
+    Effect.fn(function* () {
       const harness = makeHarness();
 
       const layer = Layer.mergeAll(harness.layer, unusedFetchLayer);
@@ -193,17 +186,21 @@ it.layer(Layer.empty)((it) => {
       expect(harness.consoleStderr.join("")).toContain(
         "The 'ultimate-search mcp stdio' command is not implemented yet.",
       );
-    }));
+    }),
+  );
 
-  it.effect("runs grok search with mocked provider success", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "runs grok search with mocked provider success",
+    Effect.fn(function* () {
       const harness = makeHarness();
       const requests: Array<string> = [];
+      const requestBodies: Array<unknown> = [];
       const fetchLayer = Layer.succeed(
         FetchService,
         FetchService.of({
-          fetch: (input) => {
+          fetch: (input, init) => {
             requests.push(String(input));
+            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
 
             return Promise.resolve(
               new Response(
@@ -241,9 +238,11 @@ it.layer(Layer.empty)((it) => {
             "search",
             "grok",
             "--query",
-            "FastAPI latest features",
+            "  FastAPI routers  ",
             "--platform",
-            "GitHub",
+            "  GitHub  ",
+            "--model",
+            "  grok-cli-override  ",
           ],
           Layer.mergeAll(harness.layer, fetchLayer),
         ).pipe(
@@ -251,7 +250,7 @@ it.layer(Layer.empty)((it) => {
             ConfigProvider.ConfigProvider,
             ConfigProvider.fromEnv({
               env: {
-                GROK_API_URL: "https://grok.example.com",
+                GROK_API_URL: " https://grok.example.com/ ",
                 GROK_API_KEY: "secret-token",
                 GROK_MODEL: "grok-test",
               },
@@ -262,6 +261,20 @@ it.layer(Layer.empty)((it) => {
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(requests).toEqual(["https://grok.example.com/v1/chat/completions"]);
+      expect(requestBodies).toEqual([
+        expect.objectContaining({
+          model: "grok-cli-override",
+          messages: [
+            expect.objectContaining({
+              role: "system",
+            }),
+            {
+              role: "user",
+              content: "FastAPI routers\n\nYou should focus on these platform: GitHub",
+            },
+          ],
+        }),
+      ]);
       expect(
         decodeJson(
           Schema.Struct({
@@ -285,10 +298,59 @@ it.layer(Layer.empty)((it) => {
         },
       });
       expect(harness.consoleStderr).toEqual([]);
-    }));
+    }),
+  );
 
-  it.effect("renders provider errors for grok search failures", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "renders config validation errors for invalid grok urls",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "grok", "--query", "release notes"],
+          Layer.mergeAll(harness.layer, unusedFetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                GROK_API_URL: "not-a-url",
+                GROK_API_KEY: "secret-token",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(harness.consoleStdout).toEqual([]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            error: Schema.Struct({
+              type: Schema.String,
+              provider: Schema.String,
+              message: Schema.String,
+              details: Schema.Array(Schema.String),
+            }),
+          }),
+          harness.consoleStderr.join("\n"),
+        ),
+      ).toEqual({
+        error: {
+          type: "ConfigValidationError",
+          provider: "shared",
+          message: "Failed to load CLI configuration.",
+          details: [expect.stringContaining("GROK_API_URL must be an absolute URL.")],
+        },
+      });
+    }),
+  );
+
+  it.effect(
+    "renders provider errors for grok search failures",
+    Effect.fn(function* () {
       const harness = makeHarness();
       const fetchLayer = Layer.succeed(
         FetchService,
@@ -346,10 +408,12 @@ it.layer(Layer.empty)((it) => {
           body: "provider unavailable",
         },
       });
-    }));
+    }),
+  );
 
-  it.effect("renders config validation errors for missing grok settings", () =>
-    Effect.gen(function* () {
+  it.effect(
+    "renders config validation errors for missing grok settings",
+    Effect.fn(function* () {
       const harness = makeHarness();
 
       const exit = yield* Effect.exit(
@@ -357,10 +421,7 @@ it.layer(Layer.empty)((it) => {
           ["search", "grok", "--query", "release notes"],
           Layer.mergeAll(harness.layer, unusedFetchLayer),
         ).pipe(
-          Effect.provideService(
-            ConfigProvider.ConfigProvider,
-            ConfigProvider.fromEnv({ env: {} }),
-          ),
+          Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
         ),
       );
 
@@ -389,5 +450,6 @@ it.layer(Layer.empty)((it) => {
           ],
         },
       });
-    }));
+    }),
+  );
 });

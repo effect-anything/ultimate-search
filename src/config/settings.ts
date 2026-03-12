@@ -1,5 +1,10 @@
-import { Config, Effect, Option, ServiceMap } from "effect";
-import { ConfigValidationError, type UltimateSearchError } from "../shared/errors.ts";
+import { Config, Effect, Layer, Option, ServiceMap } from "effect";
+import { ConfigValidationError, type UltimateSearchError } from "../shared/errors";
+import type { ServicesReturns } from "../shared/effect";
+import {
+  optionalAbsoluteUrlStringFromStringSchema,
+  optionalTrimmedNonEmptyStringFromStringSchema,
+} from "../shared/schema";
 
 export interface ProviderEnvironment {
   readonly apiUrl: Option.Option<string>;
@@ -27,154 +32,106 @@ export interface GrokProviderConfig {
   readonly model: string;
 }
 
-export interface UltimateSearchConfigService {
-  readonly settings: UltimateSearchSettings;
-  readonly grok: Effect.Effect<GrokProviderConfig, UltimateSearchError>;
+export class UltimateSearchConfig extends ServiceMap.Service<
+  UltimateSearchConfig,
+  {
+    readonly settings: UltimateSearchSettings;
+    readonly getGrokConfig: () => Effect.Effect<GrokProviderConfig, UltimateSearchError>;
+  }
+>()("UltimateSearchConfig") {
+  static readonly layer = Layer.effect(
+    UltimateSearchConfig,
+    Effect.gen(function* () {
+      const settings: UltimateSearchConfig.Methods["settings"] = yield* settingsConfig
+        .asEffect()
+        .pipe(
+          Effect.mapError(
+            (error) =>
+              new ConfigValidationError({
+                provider: "shared",
+                message: "Failed to load CLI configuration.",
+                cause: error,
+              }),
+          ),
+          Effect.withSpan("UltimateSearchConfig.settings"),
+        );
+
+      const getGrokConfig: UltimateSearchConfig.Methods["getGrokConfig"] = Effect.fn(
+        "UltimateSearchConfig.getGrokConfig",
+      )(function* (): Effect.fn.Return<GrokProviderConfig, ConfigValidationError, never> {
+        const details: Array<string> = [];
+
+        if (Option.isNone(settings.grok.apiUrl)) {
+          details.push("Set GROK_API_URL to the grok2api base URL.");
+        }
+
+        if (Option.isNone(settings.grok.apiKey)) {
+          details.push("Set GROK_API_KEY to the grok2api bearer token.");
+        }
+
+        if (details.length > 0) {
+          return yield* new ConfigValidationError({
+            provider: "grok",
+            message: "Missing required Grok configuration.",
+            details,
+          });
+        }
+
+        return {
+          apiUrl: Option.getOrElse(settings.grok.apiUrl, () => ""),
+          apiKey: Option.getOrElse(settings.grok.apiKey, () => ""),
+          model: settings.grok.model,
+        } satisfies GrokProviderConfig;
+      });
+
+      return UltimateSearchConfig.of({
+        settings,
+        getGrokConfig,
+      });
+    }),
+  );
 }
 
-export const UltimateSearchConfig =
-  ServiceMap.Service<UltimateSearchConfigService>("UltimateSearchConfig");
-
-const normalizeOptional = (value: string) => {
-  const trimmed = value.trim();
-
-  return trimmed.length === 0
-    ? Option.none<string>()
-    : Option.some(trimmed.replace(/\/+$/u, ""));
-};
-
-const normalizeOptionalSecret = (value: string) => {
-  const trimmed = value.trim();
-
-  return trimmed.length === 0 ? Option.none<string>() : Option.some(trimmed);
-};
-
-const normalizeDefaultString = (value: string, fallback: string) => {
-  const trimmed = value.trim();
-
-  return trimmed.length === 0 ? fallback : trimmed;
-};
+export declare namespace UltimateSearchConfig {
+  export type Methods = ServiceMap.Service.Shape<typeof UltimateSearchConfig>;
+  export type Returns<key extends keyof Methods, R = never> = ServicesReturns<Methods[key], R>;
+}
 
 const optionalUrlConfig = (name: string) =>
-  Config.string(name).pipe(
-    Config.withDefault(""),
-    Config.map(normalizeOptional),
-  );
+  Config.schema(
+    optionalAbsoluteUrlStringFromStringSchema(`${name} must be an absolute URL.`),
+    name,
+  ).pipe(Config.withDefault(Option.none<string>()));
 
 const optionalSecretConfig = (name: string) =>
-  Config.string(name).pipe(
-    Config.withDefault(""),
-    Config.map(normalizeOptionalSecret),
+  Config.schema(optionalTrimmedNonEmptyStringFromStringSchema, name).pipe(
+    Config.withDefault(Option.none<string>()),
   );
 
+const requiredTextConfig = (name: string, fallback: string) =>
+  Config.schema(optionalTrimmedNonEmptyStringFromStringSchema, name).pipe(
+    Config.withDefault(Option.none<string>()),
+    Config.map(Option.getOrElse(() => fallback)),
+  );
+
+const requiredUrlConfig = (name: string, fallback: string) =>
+  Config.schema(
+    optionalAbsoluteUrlStringFromStringSchema(`${name} must be an absolute URL.`),
+    name,
+  ).pipe(Config.withDefault(Option.none<string>()), Config.map(Option.getOrElse(() => fallback)));
+
 const settingsConfig = Config.all({
-  grokApiUrl: optionalUrlConfig("GROK_API_URL"),
-  grokApiKey: optionalSecretConfig("GROK_API_KEY"),
-  grokModel: Config.string("GROK_MODEL").pipe(
-    Config.withDefault("grok-4.1-fast"),
-    Config.map((value) => normalizeDefaultString(value, "grok-4.1-fast")),
-  ),
-  tavilyApiUrl: optionalUrlConfig("TAVILY_API_URL"),
-  tavilyApiKey: optionalSecretConfig("TAVILY_API_KEY"),
-  firecrawlApiUrl: Config.string("FIRECRAWL_API_URL").pipe(
-    Config.withDefault("https://api.firecrawl.dev/v2"),
-    Config.map((value) =>
-      normalizeDefaultString(value, "https://api.firecrawl.dev/v2").replace(
-        /\/+$/u,
-        "",
-      )),
-  ),
-  firecrawlApiKey: optionalSecretConfig("FIRECRAWL_API_KEY"),
-});
-
-const configLoadError = (message: string, details: ReadonlyArray<string>) =>
-  new ConfigValidationError({
-    provider: "shared",
-    message,
-    details: [...details],
-  });
-
-const resolveAbsoluteUrl = (
-  envName: string,
-  rawUrl: string,
-): Effect.Effect<string, ConfigValidationError> =>
-  Effect.try({
-    try: () => new URL(rawUrl).toString().replace(/\/+$/u, ""),
-    catch: () =>
-      configLoadError(`Invalid ${envName} value.`, [
-        `${envName} must be an absolute URL.`,
-      ]),
-  });
-
-const loadSettings = Effect.gen(function* () {
-  const config = yield* settingsConfig;
-
-  return {
-    grok: {
-      apiUrl: config.grokApiUrl,
-      apiKey: config.grokApiKey,
-      model: config.grokModel,
-    },
-    tavily: {
-      apiUrl: config.tavilyApiUrl,
-      apiKey: config.tavilyApiKey,
-    },
-    firecrawl: {
-      apiUrl: config.firecrawlApiUrl,
-      apiKey: config.firecrawlApiKey,
-    },
-  } satisfies UltimateSearchSettings;
-}).pipe(
-  Effect.mapError((error) =>
-    configLoadError("Failed to load CLI configuration.", [error.message])),
-);
-
-const requireGrokConfig = (
-  settings: UltimateSearchSettings,
-): Effect.Effect<GrokProviderConfig, ConfigValidationError> =>
-  Effect.gen(function* () {
-    const details: Array<string> = [];
-
-    if (Option.isNone(settings.grok.apiUrl)) {
-      details.push("Set GROK_API_URL to the grok2api base URL.");
-    }
-
-    if (Option.isNone(settings.grok.apiKey)) {
-      details.push("Set GROK_API_KEY to the grok2api bearer token.");
-    }
-
-    if (details.length > 0) {
-      return yield* new ConfigValidationError({
-        provider: "grok",
-        message: "Missing required Grok configuration.",
-        details,
-      });
-    }
-
-    const rawApiUrl = Option.match(settings.grok.apiUrl, {
-      onNone: () => "",
-      onSome: (value) => value,
-    });
-
-    const rawApiKey = Option.match(settings.grok.apiKey, {
-      onNone: () => "",
-      onSome: (value) => value,
-    });
-
-    const apiUrl = yield* resolveAbsoluteUrl("GROK_API_URL", rawApiUrl);
-
-    return {
-      apiUrl,
-      apiKey: rawApiKey,
-      model: settings.grok.model,
-    } satisfies GrokProviderConfig;
-  });
-
-export const UltimateSearchConfigLive = Effect.gen(function* () {
-  const settings = yield* loadSettings;
-
-  return UltimateSearchConfig.of({
-    settings,
-    grok: requireGrokConfig(settings),
-  });
-});
+  grok: Config.all({
+    apiUrl: optionalUrlConfig("GROK_API_URL"),
+    apiKey: optionalSecretConfig("GROK_API_KEY"),
+    model: requiredTextConfig("GROK_MODEL", "grok-4.1-fast"),
+  }),
+  tavily: Config.all({
+    apiUrl: optionalUrlConfig("TAVILY_API_URL"),
+    apiKey: optionalSecretConfig("TAVILY_API_KEY"),
+  }),
+  firecrawl: Config.all({
+    apiUrl: requiredUrlConfig("FIRECRAWL_API_URL", "https://api.firecrawl.dev/v2"),
+    apiKey: optionalSecretConfig("FIRECRAWL_API_KEY"),
+  }),
+}) satisfies Config.Config<UltimateSearchSettings>;
