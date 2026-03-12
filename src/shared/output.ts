@@ -1,6 +1,5 @@
-import { Config, Effect, Layer, Logger, Option, Schema, ServiceMap } from "effect";
+import { Config, Effect, Layer, Logger, Option, Schema, ServiceMap, Console } from "effect";
 import { Flag } from "effect/unstable/cli";
-import { writeStdout } from "../cli/io";
 import {
   ConfigValidationError,
   ProviderContentError,
@@ -47,7 +46,7 @@ const configErrorDetails = (error: ConfigValidationError): Array<string> => {
   return [];
 };
 
-export const writeJsonStdout = (value: unknown) => writeStdout(stringify(value));
+export const writeJsonStdout = (value: unknown) => Console.log(stringify(value));
 export const renderJsonText = (value: unknown) => stringify(value);
 
 const defaultOutputModeConfig = Config.string("AGENT").pipe(
@@ -64,7 +63,7 @@ const makeCliOutput = (defaultMode: OutputMode) =>
   CliOutput.of({
     defaultMode,
     writeOutput: ({ human, llm }, mode = defaultMode) =>
-      mode === "llm" ? writeJsonStdout(llm) : writeStdout(human),
+      mode === "llm" ? writeJsonStdout(llm) : Console.log(human),
     logError: (error, mode = defaultMode) => logCliError(error, mode),
   });
 
@@ -200,9 +199,10 @@ export class CliOutput extends ServiceMap.Service<
     readonly logError: (error: unknown, mode?: OutputMode) => Effect.Effect<void>;
   }
 >()("CliOutput") {
-  static layer() {
-    return Layer.effect(CliOutput, Effect.map(defaultOutputModeConfig.asEffect(), makeCliOutput));
-  }
+  static readonly layer = Layer.effect(
+    CliOutput,
+    Effect.map(defaultOutputModeConfig.asEffect(), makeCliOutput),
+  );
 
   static layerForMode(mode: OutputMode) {
     return Layer.succeed(CliOutput, makeCliOutput(mode));

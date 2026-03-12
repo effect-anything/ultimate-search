@@ -37,7 +37,7 @@ export class GrokProviderClient extends ServiceMap.Service<
     GrokProviderClient,
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
-      const httpClient = makeProviderHttpClient(yield* HttpClient.HttpClient);
+      const http = makeProviderHttpClient(yield* HttpClient.HttpClient);
 
       const createChatCompletion: GrokProviderClient.Methods["createChatCompletion"] = Effect.fn(
         "GrokProviderClient.createChatCompletion",
@@ -49,7 +49,7 @@ export class GrokProviderClient extends ServiceMap.Service<
           HttpClientRequest.bodyJsonUnsafe(payload),
         );
 
-        const response = yield* httpClient
+        const response = yield* http
           .execute(request)
           .pipe(
             catchProviderHttpError(

@@ -51,10 +51,7 @@ export class TavilyProviderClient extends ServiceMap.Service<
     TavilyProviderClient,
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
-      const rawHttpClient = yield* HttpClient.HttpClient;
-      const searchHttpClient = makeProviderHttpClient(rawHttpClient);
-      const mapHttpClient = makeProviderHttpClient(rawHttpClient);
-      const extractHttpClient = makeProviderHttpClient(rawHttpClient);
+      const http = makeProviderHttpClient(yield* HttpClient.HttpClient);
 
       const search: TavilyProviderClient.Methods["search"] = Effect.fn(
         "TavilyProviderClient.search",
@@ -66,7 +63,7 @@ export class TavilyProviderClient extends ServiceMap.Service<
           HttpClientRequest.bodyJsonUnsafe(payload),
         );
 
-        const response = yield* searchHttpClient
+        const response = yield* http
           .execute(request)
           .pipe(
             catchProviderHttpError(
@@ -90,7 +87,7 @@ export class TavilyProviderClient extends ServiceMap.Service<
             HttpClientRequest.bodyJsonUnsafe(payload),
           );
 
-          const response = yield* mapHttpClient
+          const response = yield* http
             .execute(request)
             .pipe(
               catchProviderHttpError(
@@ -116,7 +113,7 @@ export class TavilyProviderClient extends ServiceMap.Service<
           HttpClientRequest.bodyJsonUnsafe(payload),
         );
 
-        const response = yield* extractHttpClient
+        const response = yield* http
           .execute(request)
           .pipe(
             catchProviderHttpError(

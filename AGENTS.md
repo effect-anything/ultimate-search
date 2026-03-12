@@ -10,12 +10,11 @@
 - `src/`: main files
 - `docs/`: project documentation
 
-## Working Loop (for automation)
+## Working Loop
 
 1. Identify the target app or package.
 2. Follow local patterns in that directory.
 3. Run focused checks/tests for the target.
-4. Prefer `nx affected` for broad changes.
 
 ## Quick Commands
 
@@ -38,3 +37,11 @@ effect.
 
 Use this for learning more about the library, rather than browsing the code in
 `node_modules/`.
+
+## Engineering Principles
+
+- **Proactive Progress**: Don't wait for instructions. Identify blockers, propose solutions, and push work forward autonomously.
+- **Robust & Scalable**: Prefer solutions that work reliably and can grow. Avoid fragile hacks that break under load.
+- **Globally Optimal**: Consider the whole system, not just the immediate fix. Trade-offs should be conscious and documented.
+- **Verify Reality**: Test assumptions. A working demo beats a perfect plan.
+- **Ship & Iterate**: Perfect is the enemy of done. Get to working state, then improve.

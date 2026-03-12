@@ -35,7 +35,7 @@ export class FirecrawlProviderClient extends ServiceMap.Service<
     FirecrawlProviderClient,
     Effect.gen(function* () {
       const config = yield* UltimateSearchConfig;
-      const httpClient = makeProviderHttpClient(yield* HttpClient.HttpClient);
+      const http = makeProviderHttpClient(yield* HttpClient.HttpClient);
 
       const scrape: FirecrawlProviderClient.Methods["scrape"] = Effect.fn(
         "FirecrawlProviderClient.scrape",
@@ -47,7 +47,7 @@ export class FirecrawlProviderClient extends ServiceMap.Service<
           HttpClientRequest.bodyJsonUnsafe(payload),
         );
 
-        const response = yield* httpClient
+        const response = yield* http
           .execute(request)
           .pipe(
             catchProviderHttpError(

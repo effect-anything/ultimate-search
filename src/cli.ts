@@ -1,7 +1,21 @@
-import { BunRuntime } from "@effect/platform-bun";
-import type { Effect } from "effect";
-import { cliProgram } from "./cli/program";
+#!/usr/bin/env node
+import { NodeRuntime, NodeServices, NodeHttpClient } from "@effect/platform-node";
+import { ConfigProvider, Effect, Layer, Logger } from "effect";
+import { Command } from "effect/unstable/cli";
+import PackageJson from "../package.json" with { type: "json" };
+import { commandRoot } from "./commands/root";
+import { CliOutput, cliLoggerLayer } from "./shared/output";
+import { TracingLayer } from "./shared/tracing";
 
-BunRuntime.runMain(cliProgram as Effect.Effect<void, unknown, never>, {
-  disableErrorReporting: true,
-});
+const Live = Layer.mergeAll(
+  NodeServices.layer,
+  NodeHttpClient.layerUndici,
+  cliLoggerLayer,
+  CliOutput.layer,
+  Layer.succeed(Logger.LogToStderr, true),
+).pipe(Layer.provide([TracingLayer, ConfigProvider.layer(ConfigProvider.fromEnv())]));
+
+NodeRuntime.runMain(
+  Command.run(commandRoot, { version: PackageJson.version }).pipe(Effect.provide(Live)),
+  { disableErrorReporting: true },
+);
