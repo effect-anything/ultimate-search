@@ -12,7 +12,7 @@
     "test": "vitest --silent 'passed-only'",
     "check": "concurrently \"oxlint\" \"tsgo --noEmit\" \"bun run test --watch false\" \"effect-language-service diagnostics --project tsconfig.json\"",
     "fix": "concurrently \"oxlint --fix\" \"oxfmt\"",
-    "build": "bun build --compile --production --bytecode --sourcemap=inline --outfile=./dist/cli ./src/cli.ts  ",
+    "build": "bun build --compile --production --bytecode --sourcemap=inline --outfile=./dist/cli ./src/cli.ts",
     "prepublishOnly": "bun build"
   },
   "devDependencies": {
