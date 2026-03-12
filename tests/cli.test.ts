@@ -1,10 +1,25 @@
 import { it } from "@effect/vitest";
-import { Console, Effect, FileSystem, Layer, Path, Sink, Stdio, Terminal } from "effect";
+import {
+  ConfigProvider,
+  Console,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Path,
+  Schema,
+  Sink,
+  Stdio,
+  Terminal,
+} from "effect";
 import { Command } from "effect/unstable/cli";
+import * as CliError from "effect/unstable/cli/CliError";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { expect } from "vitest";
 import PackageJson from "../package.json" with { type: "json" };
 import { commandRoot } from "../src/commands/root.ts";
+import { FetchService } from "../src/shared/fetch.ts";
+import { writeRenderedError } from "../src/shared/output.ts";
 
 const textDecoder = new TextDecoder();
 
@@ -105,17 +120,41 @@ const commandRuntimeLayer = Layer.mergeAll(
   ),
 );
 
-const runCli = (args: ReadonlyArray<string>) =>
-  Command.runWith(commandRoot, {
-    version: PackageJson.version,
-  })(args).pipe(Effect.provide(commandRuntimeLayer));
+const renderNonCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.tapError((error) =>
+      CliError.isCliError(error) ? Effect.void : writeRenderedError(error)),
+  );
+
+const unusedFetchLayer = Layer.succeed(
+  FetchService,
+  FetchService.of({
+    fetch: () => Promise.reject(new Error("fetch is not used in this test")),
+  }),
+);
+
+const runCli = (
+  args: ReadonlyArray<string>,
+  layer: Layer.Layer<any, any, any>,
+) =>
+  renderNonCliErrors(
+    Command.runWith(commandRoot, {
+      version: PackageJson.version,
+    })(args),
+  ).pipe(Effect.provide(Layer.merge(commandRuntimeLayer, layer)));
+
+const decodeJson = <A>(_schema: Schema.Top, text: string) =>
+  Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text) as A;
 
 it.layer(Layer.empty)((it) => {
   it.effect("renders root help with the top-level command tree", () =>
     Effect.gen(function* () {
       const harness = makeHarness();
 
-      yield* runCli(["--help"]).pipe(Effect.provide(harness.layer));
+      yield* runCli(
+        ["--help"],
+        Layer.mergeAll(harness.layer, unusedFetchLayer),
+      );
 
       const output = harness.consoleStdout.join("\n");
 
@@ -130,7 +169,10 @@ it.layer(Layer.empty)((it) => {
     Effect.gen(function* () {
       const harness = makeHarness();
 
-      yield* runCli(["search", "--help"]).pipe(Effect.provide(harness.layer));
+      yield* runCli(
+        ["search", "--help"],
+        Layer.mergeAll(harness.layer, unusedFetchLayer),
+      );
 
       const output = harness.consoleStdout.join("\n");
 
@@ -143,16 +185,209 @@ it.layer(Layer.empty)((it) => {
     Effect.gen(function* () {
       const harness = makeHarness();
 
-      yield* runCli(["search", "grok"]).pipe(Effect.provide(harness.layer));
-      yield* runCli(["mcp", "stdio"]).pipe(Effect.provide(harness.layer));
+      const layer = Layer.mergeAll(harness.layer, unusedFetchLayer);
 
-      expect(harness.stdioStdout).toEqual([]);
+      yield* runCli(["mcp", "stdio"], layer);
+
+      expect(harness.consoleStdout).toEqual([]);
+      expect(harness.consoleStderr.join("")).toContain(
+        "The 'ultimate-search mcp stdio' command is not implemented yet.",
+      );
+    }));
+
+  it.effect("runs grok search with mocked provider success", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness();
+      const requests: Array<string> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input) => {
+            requests.push(String(input));
+
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  model: "grok-test",
+                  choices: [
+                    {
+                      message: {
+                        role: "assistant",
+                        content: "Mocked Grok answer",
+                      },
+                    },
+                  ],
+                  usage: {
+                    prompt_tokens: 12,
+                    completion_tokens: 34,
+                    total_tokens: 46,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            );
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          [
+            "search",
+            "grok",
+            "--query",
+            "FastAPI latest features",
+            "--platform",
+            "GitHub",
+          ],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                GROK_API_URL: "https://grok.example.com",
+                GROK_API_KEY: "secret-token",
+                GROK_MODEL: "grok-test",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(requests).toEqual(["https://grok.example.com/v1/chat/completions"]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            content: Schema.String,
+            model: Schema.String,
+            usage: Schema.Struct({
+              prompt_tokens: Schema.Number,
+              completion_tokens: Schema.Number,
+              total_tokens: Schema.Number,
+            }),
+          }),
+          harness.consoleStdout.join("\n"),
+        ),
+      ).toEqual({
+        content: "Mocked Grok answer",
+        model: "grok-test",
+        usage: {
+          prompt_tokens: 12,
+          completion_tokens: 34,
+          total_tokens: 46,
+        },
+      });
       expect(harness.consoleStderr).toEqual([]);
-      expect(harness.stdioStderr.join("")).toContain(
-        "The 'ultimate-search search grok' command is not implemented yet.\n",
+    }));
+
+  it.effect("renders provider errors for grok search failures", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness();
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: () =>
+            Promise.resolve(
+              new Response("provider unavailable", {
+                status: 503,
+                headers: {
+                  "content-type": "text/plain",
+                },
+              }),
+            ),
+        }),
       );
-      expect(harness.stdioStderr.join("")).toContain(
-        "The 'ultimate-search mcp stdio' command is not implemented yet.\n",
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "grok", "--query", "release notes"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                GROK_API_URL: "https://grok.example.com",
+                GROK_API_KEY: "secret-token",
+              },
+            }),
+          ),
+        ),
       );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(harness.consoleStdout).toEqual([]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            error: Schema.Struct({
+              type: Schema.String,
+              provider: Schema.String,
+              message: Schema.String,
+              status: Schema.Number,
+              body: Schema.String,
+            }),
+          }),
+          harness.consoleStderr.join("\n"),
+        ),
+      ).toEqual({
+        error: {
+          type: "ProviderResponseError",
+          provider: "grok",
+          message: "Grok returned HTTP 503.",
+          status: 503,
+          body: "provider unavailable",
+        },
+      });
+    }));
+
+  it.effect("renders config validation errors for missing grok settings", () =>
+    Effect.gen(function* () {
+      const harness = makeHarness();
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "grok", "--query", "release notes"],
+          Layer.mergeAll(harness.layer, unusedFetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({ env: {} }),
+          ),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(harness.consoleStdout).toEqual([]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            error: Schema.Struct({
+              type: Schema.String,
+              provider: Schema.String,
+              message: Schema.String,
+              details: Schema.Array(Schema.String),
+            }),
+          }),
+          harness.consoleStderr.join("\n"),
+        ),
+      ).toEqual({
+        error: {
+          type: "ConfigValidationError",
+          provider: "grok",
+          message: "Missing required Grok configuration.",
+          details: [
+            "Set GROK_API_URL to the grok2api base URL.",
+            "Set GROK_API_KEY to the grok2api bearer token.",
+          ],
+        },
+      });
     }));
 });

@@ -1,22 +1,5 @@
-import { Effect, Stdio, Stream } from "effect";
+import { Console } from "effect";
 
-const withTrailingNewline = (text: string) =>
-  text.endsWith("\n") ? text : `${text}\n`;
+export const writeStdout = (text: string) => Console.log(text);
 
-const write = (
-  text: string,
-  sink: (stdio: Stdio.Stdio) => ReturnType<Stdio.Stdio["stdout"]>,
-) =>
-  Effect.gen(function* () {
-    const stdio = yield* Stdio.Stdio;
-
-    yield* Stream.make(withTrailingNewline(text)).pipe(
-      Stream.run(sink(stdio)),
-    );
-  });
-
-export const writeStdout = (text: string) =>
-  write(text, (stdio) => stdio.stdout({ endOnDone: false }));
-
-export const writeStderr = (text: string) =>
-  write(text, (stdio) => stdio.stderr({ endOnDone: false }));
+export const writeStderr = (text: string) => Console.error(text);
