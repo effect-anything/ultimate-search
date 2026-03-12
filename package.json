@@ -1,0 +1,29 @@
+{
+  "name": "ultimate-search",
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "ultimate-search": "./dist/cli"
+  },
+  "type": "module",
+  "scripts": {
+    "prepare": "husky && effect-language-service patch",
+    "check": "concurrently \"bun run tsgo --noEmit\" \"bun run oxlint -c .oxlintrc.json\" \"bun run test\"",
+    "build": "bun build --compile --production --bytecode --sourcemap=inline --outfile=./dist/cli ./src/cli.ts  ",
+    "prepublishOnly": "bun build"
+  },
+  "devDependencies": {
+    "oxlint": "^1.53.0",
+    "oxfmt": "^0.38.0",
+    "@effect/platform-bun": "^0.87.1",
+    "@effect/vitest": "4.0.0-beta.31",
+    "effect": "4.0.0-beta.31",
+    "@types/bun": "latest",
+    "@effect/language-service": "^0.79.0",
+    "@typescript/native-preview": "7.0.0-dev.20260311.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.3",
+    "typescript": "^5.9.3"
+  }
+}

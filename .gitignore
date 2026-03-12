@@ -1,0 +1,16 @@
+.env
+data/
+logs/
+*.log
+.DS_Store
+*.txt.bak
+
+dist
+
+.repo/*
+!.repo/
+!.repo/clone-reference-repos.sh
+
+node_modules
+.lalph
+.specs
