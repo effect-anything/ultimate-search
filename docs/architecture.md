@@ -7,6 +7,7 @@
 OpenClaw 的底层 agent Pi 的设计哲学是：**agent 通过 Bash 执行代码来扩展自己**，而非通过 MCP 加载外部工具。MCP 工具需要注入到模型的系统上下文中，增加 token 消耗，且不支持热重载。
 
 因此我们选择了 **Skill + Shell 脚本** 的方案：
+
 - SKILL.md 引导 agent 的搜索决策和方法论
 - Shell 脚本通过 Bash 工具直接调用
 - 无额外进程、无上下文开销
@@ -66,15 +67,15 @@ Agent → Bash → dual-search.sh
 
 ## 与 GrokSearch MCP 的对比
 
-| 维度 | GrokSearch MCP | UltimateSearch |
-|------|---------------|---------------------|
-| 运行时 | 独立 Python MCP 进程 | 无额外进程，Shell 脚本 |
-| 安装 | Python + uvx + FastMCP | Docker + bash |
-| Agent 集成 | 需要 MCP 客户端支持 | Bash 原生调用 |
-| Token 管理 | 单个 Key | 多 Key 聚合（grok2api） |
-| 搜索规划 | MCP tool（search_planning） | Skill 指令引导 agent 自行规划 |
-| 上下文开销 | 工具定义占用 context | 仅 Skill 指令，按需加载 |
-| 维护 | 依赖上游更新 | 自己掌控 |
+| 维度       | GrokSearch MCP              | UltimateSearch                |
+| ---------- | --------------------------- | ----------------------------- |
+| 运行时     | 独立 Python MCP 进程        | 无额外进程，Shell 脚本        |
+| 安装       | Python + uvx + FastMCP      | Docker + bash                 |
+| Agent 集成 | 需要 MCP 客户端支持         | Bash 原生调用                 |
+| Token 管理 | 单个 Key                    | 多 Key 聚合（grok2api）       |
+| 搜索规划   | MCP tool（search_planning） | Skill 指令引导 agent 自行规划 |
+| 上下文开销 | 工具定义占用 context        | 仅 Skill 指令，按需加载       |
+| 维护       | 依赖上游更新                | 自己掌控                      |
 
 ## 安全加固
 
@@ -84,8 +85,8 @@ Agent → Bash → dual-search.sh
 
 ```yaml
 ports:
-  - "127.0.0.1:8100:8000"   # grok2api
-  - "127.0.0.1:8200:8080"   # TavilyProxyManager
+  - "127.0.0.1:8100:8000" # grok2api
+  - "127.0.0.1:8200:8080" # TavilyProxyManager
 ```
 
 ### 认证
