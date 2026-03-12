@@ -56,7 +56,6 @@ export class UltimateSearchConfig extends ServiceMap.Service<
               new ConfigValidationError({
                 provider: "shared",
                 message: "Failed to load CLI configuration.",
-                details: [error instanceof Error ? error.message : String(error)],
                 cause: error,
               }),
           ),
@@ -170,3 +169,37 @@ const settingsConfig = Config.all({
     apiKey: optionalSecretConfig("FIRECRAWL_API_KEY"),
   }),
 }) satisfies Config.Config<UltimateSearchSettings>;
+
+const configErrorDetails = (error: unknown): Array<string> => {
+  if (error instanceof Config.ConfigError && error.message.length > 0) {
+    return [error.message];
+  }
+
+  if (error instanceof Error && error.message.length > 0) {
+    return [error.message];
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.length > 0
+  ) {
+    return [error.message];
+  }
+
+  if (typeof error === "string" && error.length > 0) {
+    return [error];
+  }
+
+  if (error != null) {
+    const text = String(error);
+
+    if (text.length > 0 && text !== "[object Object]") {
+      return [text];
+    }
+  }
+
+  return [];
+};

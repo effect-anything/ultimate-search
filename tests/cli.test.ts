@@ -19,7 +19,7 @@ import { expect } from "vitest";
 import PackageJson from "../package.json" with { type: "json" };
 import { commandRoot } from "../src/commands/root";
 import { FetchService } from "../src/shared/fetch";
-import { writeRenderedError } from "../src/shared/output";
+import { CliOutput } from "../src/shared/output";
 
 const textDecoder = new TextDecoder();
 
@@ -119,7 +119,12 @@ const commandRuntimeLayer = Layer.mergeAll(
 const renderNonCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
     Effect.tapError((error) =>
-      CliError.isCliError(error) ? Effect.void : writeRenderedError(error),
+      CliError.isCliError(error)
+        ? Effect.void
+        : Effect.gen(function* () {
+            const cliOutput = yield* CliOutput;
+            yield* cliOutput.writeError(error);
+          }),
     ),
   );
 
@@ -130,12 +135,22 @@ const unusedFetchLayer = Layer.succeed(
   }),
 );
 
-const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<any, any, any>) =>
+const runCli = (
+  args: ReadonlyArray<string>,
+  layer: Layer.Layer<any, any, any>,
+  env?: {
+    readonly AGENT?: string | undefined;
+  },
+) =>
   renderNonCliErrors(
     Command.runWith(commandRoot, {
       version: PackageJson.version,
     })(args),
-  ).pipe(Effect.provide(Layer.merge(commandRuntimeLayer, layer)));
+  ).pipe(
+    Effect.provide(
+      Layer.merge(commandRuntimeLayer, Layer.merge(layer, CliOutput.layerForArgs(args, env))),
+    ),
+  );
 
 const decodeJson = <A>(_schema: Schema.Top, text: string) =>
   Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text) as A;
@@ -190,7 +205,7 @@ it.layer(Layer.empty)((it) => {
   );
 
   it.effect(
-    "runs grok search with mocked provider success",
+    "runs grok search with mocked provider success and human-readable output by default",
     Effect.fn(function* () {
       const harness = makeHarness();
       const requests: Array<string> = [];
@@ -275,6 +290,71 @@ it.layer(Layer.empty)((it) => {
           ],
         }),
       ]);
+      const output = harness.consoleStdout.join("\n");
+
+      expect(output).toContain("Mocked Grok answer");
+      expect(output).toContain("Model: grok-test");
+      expect(output).toContain("Tokens: 46 total (12 prompt, 34 completion)");
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "switches grok success output to llm JSON when AGENT is set",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: () =>
+            Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  model: "grok-test",
+                  choices: [
+                    {
+                      message: {
+                        role: "assistant",
+                        content: "Mocked Grok answer",
+                      },
+                    },
+                  ],
+                  usage: {
+                    prompt_tokens: 12,
+                    completion_tokens: 34,
+                    total_tokens: 46,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            ),
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "grok", "--query", "release notes"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+          { AGENT: "codex" },
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                GROK_API_URL: "https://grok.example.com",
+                GROK_API_KEY: "secret-token",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
       expect(
         decodeJson(
           Schema.Struct({
@@ -302,7 +382,69 @@ it.layer(Layer.empty)((it) => {
   );
 
   it.effect(
-    "renders config validation errors for invalid grok urls",
+    "allows --output human to override AGENT-driven llm mode",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: () =>
+            Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  model: "grok-test",
+                  choices: [
+                    {
+                      message: {
+                        role: "assistant",
+                        content: "Mocked Grok answer",
+                      },
+                    },
+                  ],
+                  usage: {
+                    prompt_tokens: 12,
+                    completion_tokens: 34,
+                    total_tokens: 46,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            ),
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["search", "grok", "--query", "release notes", "--output", "human"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+          { AGENT: "codex" },
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                GROK_API_URL: "https://grok.example.com",
+                GROK_API_KEY: "secret-token",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(harness.consoleStdout.join("\n")).toContain("Model: grok-test");
+      expect(harness.consoleStdout.join("\n")).not.toContain('"model": "grok-test"');
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "renders config validation errors for invalid grok urls in human-readable form by default",
     Effect.fn(function* () {
       const harness = makeHarness();
 
@@ -325,31 +467,15 @@ it.layer(Layer.empty)((it) => {
 
       expect(Exit.isFailure(exit)).toBe(true);
       expect(harness.consoleStdout).toEqual([]);
-      expect(
-        decodeJson(
-          Schema.Struct({
-            error: Schema.Struct({
-              type: Schema.String,
-              provider: Schema.String,
-              message: Schema.String,
-              details: Schema.Array(Schema.String),
-            }),
-          }),
-          harness.consoleStderr.join("\n"),
-        ),
-      ).toEqual({
-        error: {
-          type: "ConfigValidationError",
-          provider: "shared",
-          message: "Failed to load CLI configuration.",
-          details: [expect.stringContaining("GROK_API_URL must be an absolute URL.")],
-        },
-      });
+      const errorOutput = harness.consoleStderr.join("\n");
+      expect(errorOutput).toContain("Configuration error (shared)");
+      expect(errorOutput).toContain("Failed to load CLI configuration.");
+      expect(errorOutput).toContain("GROK_API_URL must be an absolute URL.");
     }),
   );
 
   it.effect(
-    "renders provider errors for grok search failures",
+    "renders provider errors for grok search failures in llm mode when requested",
     Effect.fn(function* () {
       const harness = makeHarness();
       const fetchLayer = Layer.succeed(
@@ -369,7 +495,7 @@ it.layer(Layer.empty)((it) => {
 
       const exit = yield* Effect.exit(
         runCli(
-          ["search", "grok", "--query", "release notes"],
+          ["search", "grok", "--query", "release notes", "--output", "llm"],
           Layer.mergeAll(harness.layer, fetchLayer),
         ).pipe(
           Effect.provideService(
@@ -412,7 +538,7 @@ it.layer(Layer.empty)((it) => {
   );
 
   it.effect(
-    "renders config validation errors for missing grok settings",
+    "renders config validation errors for missing grok settings in human-readable form by default",
     Effect.fn(function* () {
       const harness = makeHarness();
 
@@ -427,27 +553,38 @@ it.layer(Layer.empty)((it) => {
 
       expect(Exit.isFailure(exit)).toBe(true);
       expect(harness.consoleStdout).toEqual([]);
+      const errorOutput = harness.consoleStderr.join("\n");
+      expect(errorOutput).toContain("Configuration error (grok)");
+      expect(errorOutput).toContain("Missing required Grok configuration.");
+      expect(errorOutput).toContain("Set GROK_API_URL to the grok2api base URL.");
+      expect(errorOutput).toContain("Set GROK_API_KEY to the grok2api bearer token.");
+    }),
+  );
+
+  it.effect(
+    "renders non-MCP stub failures as structured errors in llm mode",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+
+      yield* runCli(["fetch", "--output", "llm"], Layer.mergeAll(harness.layer, unusedFetchLayer));
+
+      expect(harness.consoleStdout).toEqual([]);
       expect(
         decodeJson(
           Schema.Struct({
             error: Schema.Struct({
               type: Schema.String,
-              provider: Schema.String,
+              command: Schema.String,
               message: Schema.String,
-              details: Schema.Array(Schema.String),
             }),
           }),
           harness.consoleStderr.join("\n"),
         ),
       ).toEqual({
         error: {
-          type: "ConfigValidationError",
-          provider: "grok",
-          message: "Missing required Grok configuration.",
-          details: [
-            "Set GROK_API_URL to the grok2api base URL.",
-            "Set GROK_API_KEY to the grok2api bearer token.",
-          ],
+          type: "NotImplemented",
+          command: "ultimate-search fetch",
+          message: "The 'ultimate-search fetch' command is not implemented yet.",
         },
       });
     }),

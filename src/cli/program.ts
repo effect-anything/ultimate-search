@@ -16,7 +16,7 @@ import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawne
 import PackageJson from "../../package.json" with { type: "json" };
 import { commandRoot } from "../commands/root";
 import { FetchService } from "../shared/fetch";
-import { writeRenderedError } from "../shared/output";
+import { CliOutput } from "../shared/output";
 
 const loggerLayer = Logger.layer([Logger.consolePretty()]);
 const textDecoder = new TextDecoder();
@@ -57,7 +57,7 @@ const terminalLayer = Layer.succeed(Terminal.Terminal, {
   display: () => Effect.void,
 } as unknown as Terminal.Terminal);
 
-const runtimeLayer = Layer.mergeAll(
+const runtimeBaseLayer = Layer.mergeAll(
   Path.layer,
   FileSystem.layerNoop({}),
   terminalLayer,
@@ -68,10 +68,18 @@ const runtimeLayer = Layer.mergeAll(
   Layer.succeed(Logger.LogToStderr, true),
 );
 
+const runtimeLayerForArgs = (args: ReadonlyArray<string>) =>
+  Layer.merge(runtimeBaseLayer, CliOutput.layerForArgs(args));
+
 const renderNonCliErrors = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
     Effect.tapError((error) =>
-      CliError.isCliError(error) ? Effect.void : writeRenderedError(error),
+      CliError.isCliError(error)
+        ? Effect.void
+        : Effect.gen(function* () {
+            const cliOutput = yield* CliOutput;
+            yield* cliOutput.writeError(error);
+          }),
     ),
   );
 
@@ -80,12 +88,11 @@ export const runCli = (args: ReadonlyArray<string>) =>
     Command.runWith(commandRoot, {
       version: PackageJson.version,
     })(args),
-  ).pipe(Effect.provide(runtimeLayer as never));
+  ).pipe(Effect.provide(runtimeLayerForArgs(args) as never));
 
-export const cliProgram = renderNonCliErrors(
-  commandRoot.pipe(
-    Command.run({
-      version: PackageJson.version,
-    }),
-  ),
-).pipe(Effect.provide(runtimeLayer as never));
+const currentProcessArgs = (): ReadonlyArray<string> =>
+  "process" in globalThis && Array.isArray(globalThis.process?.argv)
+    ? globalThis.process.argv.slice(2)
+    : [];
+
+export const cliProgram = Effect.suspend(() => runCli(currentProcessArgs()));
