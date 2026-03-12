@@ -1,4 +1,5 @@
 import { Config } from "effect";
+import { Schema } from "effect";
 import {
   ConfigValidationError,
   ProviderDecodeError,
@@ -14,6 +15,15 @@ export interface RenderedError {
   readonly status?: number;
   readonly body?: string;
 }
+
+export const RenderedErrorSchema = Schema.Struct({
+  type: Schema.String,
+  provider: Schema.optional(Schema.String),
+  message: Schema.String,
+  details: Schema.optional(Schema.Array(Schema.String)),
+  status: Schema.optional(Schema.Number),
+  body: Schema.optional(Schema.String),
+});
 
 const configErrorDetails = (error: ConfigValidationError): Array<string> => {
   const details = Array.isArray(error.details)

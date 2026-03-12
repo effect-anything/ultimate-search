@@ -1,8 +1,7 @@
-import { Effect, Exit } from "effect";
+import { BunRuntime } from "@effect/platform-bun";
+import { Effect } from "effect";
 import { cliProgram } from "./cli/program";
 
-const exit = await Effect.runPromiseExit(cliProgram as Effect.Effect<void, unknown, never>);
-
-if (Exit.isFailure(exit)) {
-  process.exit(1);
-}
+BunRuntime.runMain(cliProgram as Effect.Effect<void, unknown, never>, {
+  disableErrorReporting: true,
+});

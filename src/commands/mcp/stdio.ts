@@ -1,7 +1,27 @@
+import { Cause, Effect, Layer } from "effect";
+import { McpServer } from "effect/unstable/ai";
 import { Command } from "effect/unstable/cli";
-import { makeStubHandler } from "../stub";
+import PackageJson from "../../../package.json" with { type: "json" };
+import {
+  readOnlyMcpRegistrationLayer,
+  readOnlyMcpServicesLayer,
+} from "../../services/read-only-mcp";
+
+const mcpStdioServerLayer = readOnlyMcpRegistrationLayer.pipe(
+  Layer.provideMerge(
+    McpServer.layerStdio({
+      name: "ultimate-search",
+      version: PackageJson.version,
+    }),
+  ),
+  Layer.provideMerge(readOnlyMcpServicesLayer),
+);
 
 export const commandMcpStdio = Command.make("stdio").pipe(
   Command.withDescription("Serve the MCP protocol over stdio."),
-  Command.withHandler(makeStubHandler("ultimate-search mcp stdio", { useCliOutput: false })),
+  Command.withHandler(() =>
+    Layer.launch(mcpStdioServerLayer).pipe(
+      Effect.catchCauseIf(Cause.hasInterruptsOnly, () => Effect.void),
+    ),
+  ),
 );

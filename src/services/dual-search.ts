@@ -1,18 +1,20 @@
 import { Effect, Layer, Result, Schema, ServiceMap } from "effect";
 import {
   GrokSearchInput,
+  GrokSearchResultSchema,
   type GrokSearchResult,
 } from "../providers/grok/schema";
 import {
   TavilySearchDepthSchema,
   TavilySearchInput,
+  TavilySearchResponseSchema,
   type TavilySearchResponse,
   TavilySearchTopicSchema,
   TavilyTimeRangeSchema,
 } from "../providers/tavily/schema";
 import type { ServicesReturns } from "../shared/effect";
 import type { RenderedError } from "../shared/render-error";
-import { renderStructuredError } from "../shared/render-error";
+import { RenderedErrorSchema, renderStructuredError } from "../shared/render-error";
 import { trimmedNonEmptyStringSchema } from "../shared/schema";
 import { GrokSearch } from "./grok-search";
 import { TavilySearch } from "./tavily-search";
@@ -53,6 +55,28 @@ export interface DualSearchResult {
   readonly grok: DualSearchProviderResult<GrokSearchResult>;
   readonly tavily: DualSearchProviderResult<TavilySearchResponse>;
 }
+
+const dualSearchProviderSuccessSchema = <A extends Schema.Top>(resultSchema: A) =>
+  Schema.Struct({
+    status: Schema.Literal("success"),
+    result: resultSchema,
+  });
+
+const DualSearchProviderFailureSchema = Schema.Struct({
+  status: Schema.Literal("error"),
+  error: RenderedErrorSchema,
+});
+
+export const DualSearchResultSchema = Schema.Struct({
+  grok: Schema.Union([
+    dualSearchProviderSuccessSchema(GrokSearchResultSchema),
+    DualSearchProviderFailureSchema,
+  ]),
+  tavily: Schema.Union([
+    dualSearchProviderSuccessSchema(TavilySearchResponseSchema),
+    DualSearchProviderFailureSchema,
+  ]),
+});
 
 const toProviderResult = <A, E>(result: Result.Result<A, E>): DualSearchProviderResult<A> =>
   Result.match(result, {

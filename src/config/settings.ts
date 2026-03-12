@@ -65,11 +65,11 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         const details: Array<string> = [];
 
         if (Option.isNone(grok.apiUrl)) {
-          details.push("Set GROK_API_URL to the grok2api base URL.");
+          details.push("Set GROK_API_URL to the grok base URL.");
         }
 
         if (Option.isNone(grok.apiKey)) {
-          details.push("Set GROK_API_KEY to the grok2api bearer token.");
+          details.push("Set GROK_API_KEY to the grok bearer token.");
         }
 
         if (details.length > 0) {

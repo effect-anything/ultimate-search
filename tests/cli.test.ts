@@ -1,5 +1,6 @@
 import { it } from "@effect/vitest";
 import {
+  Cause,
   ConfigProvider,
   Console,
   Effect,
@@ -189,18 +190,24 @@ it.layer(Layer.empty)((it) => {
   );
 
   it.effect(
-    "writes stub notices to stderr for provider commands",
+    "returns an interrupt-only exit for mcp stdio when stdin closes immediately",
     Effect.fn(function* () {
       const harness = makeHarness();
 
       const layer = Layer.mergeAll(harness.layer, unusedFetchLayer);
 
-      yield* runCli(["mcp", "stdio"], layer);
-
-      expect(harness.consoleStdout).toEqual([]);
-      expect(harness.consoleStderr.join("")).toContain(
-        "The 'ultimate-search mcp stdio' command is not implemented yet.",
+      const exit = yield* Effect.promise(() =>
+        Effect.runPromiseExit(
+          Effect.exit(runCli(["mcp", "stdio"], layer) as Effect.Effect<void, unknown, never>),
+        ),
       );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true);
+      }
+      expect(harness.consoleStdout).toEqual([]);
+      expect(harness.consoleStderr).toEqual([]);
     }),
   );
 
@@ -556,8 +563,8 @@ it.layer(Layer.empty)((it) => {
       const errorOutput = harness.consoleStderr.join("\n");
       expect(errorOutput).toContain("Configuration error (grok)");
       expect(errorOutput).toContain("Missing required Grok configuration.");
-      expect(errorOutput).toContain("Set GROK_API_URL to the grok2api base URL.");
-      expect(errorOutput).toContain("Set GROK_API_KEY to the grok2api bearer token.");
+      expect(errorOutput).toContain("Set GROK_API_URL to the grok base URL.");
+      expect(errorOutput).toContain("Set GROK_API_KEY to the grok bearer token.");
     }),
   );
 
@@ -819,10 +826,7 @@ it.layer(Layer.empty)((it) => {
       );
 
       const exit = yield* Effect.exit(
-        runCli(
-          ["fetch", "--url", "not-a-url"],
-          Layer.mergeAll(harness.layer, fetchLayer),
-        ).pipe(
+        runCli(["fetch", "--url", "not-a-url"], Layer.mergeAll(harness.layer, fetchLayer)).pipe(
           Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
         ),
       );

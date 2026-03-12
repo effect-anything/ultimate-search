@@ -52,6 +52,12 @@ export interface GrokSearchResult {
   readonly usage: GrokUsage;
 }
 
+export const GrokSearchResultSchema = Schema.Struct({
+  content: Schema.String,
+  model: Schema.String,
+  usage: GrokUsageSchema,
+});
+
 const timeSensitivePattern =
   /今天|最新|当前|latest|recent|today|current|now|这几天|本周|本月|近期|最近/iu;
 
