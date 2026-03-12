@@ -52,12 +52,16 @@ export class UltimateSearchConfig extends ServiceMap.Service<
         .asEffect()
         .pipe(
           Effect.mapError(
-            (error) =>
-              new ConfigValidationError({
+            (error) => {
+              const details = configErrorDetails(error);
+
+              return new ConfigValidationError({
                 provider: "shared",
                 message: "Failed to load CLI configuration.",
+                ...(details.length > 0 ? { details } : {}),
                 cause: error,
-              }),
+              });
+            },
           ),
           Effect.withSpan("UltimateSearchConfig.settings"),
         );

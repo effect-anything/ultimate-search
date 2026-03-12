@@ -733,6 +733,7 @@ it.layer(Layer.empty)((it) => {
         runCli(
           ["search", "tavily", "--query", "release notes"],
           Layer.mergeAll(harness.layer, fetchLayer),
+          { AGENT: "codex" },
         ).pipe(
           Effect.provideService(
             ConfigProvider.ConfigProvider,
@@ -782,6 +783,7 @@ it.layer(Layer.empty)((it) => {
         runCli(
           ["search", "tavily", "--query", "release notes"],
           Layer.mergeAll(harness.layer, unusedFetchLayer),
+          { AGENT: "codex" },
         ).pipe(
           Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnv({ env: {} })),
         ),
@@ -810,6 +812,217 @@ it.layer(Layer.empty)((it) => {
             "Set TAVILY_API_URL to the Tavily or Tavily proxy base URL.",
             "Set TAVILY_API_KEY to the Tavily or Tavily proxy bearer token.",
           ],
+        },
+      });
+    }),
+  );
+
+  it.effect(
+    "runs tavily map with mocked provider success and emits llm JSON output",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const requests: Array<string> = [];
+      const requestBodies: Array<unknown> = [];
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: (input, init) => {
+            requests.push(String(input));
+            requestBodies.push(JSON.parse(String(init?.body ?? "{}")));
+
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  base_url: "https://fastapi.tiangolo.com",
+                  response_time: 0.18,
+                  results: [
+                    "https://fastapi.tiangolo.com/docs",
+                    "https://fastapi.tiangolo.com/release-notes",
+                  ],
+                  usage: {
+                    credits_used: 2,
+                  },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "content-type": "application/json",
+                  },
+                },
+              ),
+            );
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          [
+            "map",
+            "--url",
+            " https://fastapi.tiangolo.com/ ",
+            "--depth",
+            "2",
+            "--breadth",
+            "20",
+            "--limit",
+            "50",
+            "--instructions",
+            "  Stay within docs pages  ",
+            "--output",
+            "llm",
+          ],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: " https://tavily.example.com/ ",
+                TAVILY_API_KEY: "tavily-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(requests).toEqual(["https://tavily.example.com/map"]);
+      expect(requestBodies).toEqual([
+        {
+          url: "https://fastapi.tiangolo.com",
+          max_depth: 2,
+          max_breadth: 20,
+          limit: 50,
+          instructions: "Stay within docs pages",
+        },
+      ]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            base_url: Schema.String,
+            response_time: Schema.Number,
+            results: Schema.Array(Schema.String),
+            usage: Schema.Struct({
+              credits_used: Schema.Number,
+            }),
+          }),
+          harness.consoleStdout.join("\n"),
+        ),
+      ).toEqual({
+        base_url: "https://fastapi.tiangolo.com",
+        response_time: 0.18,
+        results: [
+          "https://fastapi.tiangolo.com/docs",
+          "https://fastapi.tiangolo.com/release-notes",
+        ],
+        usage: {
+          credits_used: 2,
+        },
+      });
+      expect(harness.consoleStderr).toEqual([]);
+    }),
+  );
+
+  it.effect(
+    "validates tavily map numeric bounds before provider execution",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      let fetchCalls = 0;
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: () => {
+            fetchCalls += 1;
+            return Promise.reject(new Error("fetch should not be called"));
+          },
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["map", "--url", "https://fastapi.tiangolo.com", "--depth", "0", "--output", "llm"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: "https://tavily.example.com",
+                TAVILY_API_KEY: "tavily-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(fetchCalls).toBe(0);
+      expect(harness.consoleStdout.join("\n")).toContain("ultimate-search map [flags]");
+      expect(harness.consoleStderr.join("\n")).toContain(
+        "depth must be an integer between 1 and 5",
+      );
+    }),
+  );
+
+  it.effect(
+    "renders provider errors for tavily map failures in llm mode",
+    Effect.fn(function* () {
+      const harness = makeHarness();
+      const fetchLayer = Layer.succeed(
+        FetchService,
+        FetchService.of({
+          fetch: () =>
+            Promise.resolve(
+              new Response("map unavailable", {
+                status: 503,
+                headers: {
+                  "content-type": "text/plain",
+                },
+              }),
+            ),
+        }),
+      );
+
+      const exit = yield* Effect.exit(
+        runCli(
+          ["map", "--url", "https://fastapi.tiangolo.com", "--output", "llm"],
+          Layer.mergeAll(harness.layer, fetchLayer),
+        ).pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromEnv({
+              env: {
+                TAVILY_API_URL: "https://tavily.example.com",
+                TAVILY_API_KEY: "tavily-secret",
+              },
+            }),
+          ),
+        ),
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(harness.consoleStdout).toEqual([]);
+      expect(
+        decodeJson(
+          Schema.Struct({
+            error: Schema.Struct({
+              type: Schema.String,
+              provider: Schema.String,
+              message: Schema.String,
+              status: Schema.Number,
+              body: Schema.String,
+            }),
+          }),
+          harness.consoleStderr.join("\n"),
+        ),
+      ).toEqual({
+        error: {
+          type: "ProviderResponseError",
+          provider: "tavily",
+          message: "Tavily map returned HTTP 503.",
+          status: 503,
+          body: "map unavailable",
         },
       });
     }),

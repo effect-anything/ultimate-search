@@ -9,6 +9,10 @@ import {
   type UltimateSearchError,
 } from "../../shared/errors";
 import {
+  TavilyMapRequestSchema,
+  type TavilyMapRequest,
+  TavilyMapResponseSchema,
+  type TavilyMapResponse,
   TavilySearchRequestSchema,
   type TavilySearchRequest,
   TavilySearchResponseSchema,
@@ -21,6 +25,12 @@ const encodeTavilySearchRequest = Schema.encodeUnknownEffect(
 
 const decodeTavilySearchResponse = Schema.decodeUnknownEffect(
   Schema.fromJsonString(TavilySearchResponseSchema),
+);
+
+const encodeTavilyMapRequest = Schema.encodeUnknownEffect(Schema.fromJsonString(TavilyMapRequestSchema));
+
+const decodeTavilyMapResponse = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(TavilyMapResponseSchema),
 );
 
 const mapRequestError = (error: unknown, fallback: string) =>
@@ -42,6 +52,9 @@ export class TavilyProviderClient extends ServiceMap.Service<
     readonly search: (
       request: TavilySearchRequest,
     ) => Effect.Effect<TavilySearchResponse, UltimateSearchError, never>;
+    readonly map: (
+      request: TavilyMapRequest,
+    ) => Effect.Effect<TavilyMapResponse, UltimateSearchError, never>;
   }
 >()("TavilyProviderClient") {
   static readonly layer = Layer.effect(
@@ -94,7 +107,51 @@ export class TavilyProviderClient extends ServiceMap.Service<
         );
       });
 
+      const map: TavilyProviderClient.Methods["map"] = Effect.fn("TavilyProviderClient.map")(
+        function* (payload): TavilyProviderClient.Returns<"map"> {
+          const requestBody = yield* encodeTavilyMapRequest(payload).pipe(
+            Effect.mapError((error) =>
+              mapRequestError(error, "Failed to encode the Tavily map payload."),
+            ),
+          );
+
+          const response = yield* Effect.tryPromise({
+            try: () =>
+              fetchService.fetch(`${tavily.apiUrl}/map`, {
+                method: "POST",
+                headers: {
+                  "content-type": "application/json",
+                  authorization: `Bearer ${tavily.apiKey}`,
+                },
+                body: requestBody,
+              }),
+            catch: (error) => mapRequestError(error, "Failed to send the Tavily map request."),
+          });
+
+          const bodyText = yield* Effect.tryPromise({
+            try: () => response.text(),
+            catch: (error) => mapRequestError(error, "Failed to read the Tavily map response body."),
+          });
+
+          if (!response.ok) {
+            return yield* new ProviderResponseError({
+              provider: "tavily",
+              message: `Tavily map returned HTTP ${response.status}.`,
+              status: response.status,
+              body: bodyText,
+            });
+          }
+
+          return yield* decodeTavilyMapResponse(bodyText).pipe(
+            Effect.mapError((error) =>
+              mapDecodeError(error, "Failed to decode the Tavily map response payload."),
+            ),
+          );
+        },
+      );
+
       return TavilyProviderClient.of({
+        map,
         search,
       });
     }),
