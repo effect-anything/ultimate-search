@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { NodeRuntime, NodeServices, NodeHttpClient } from "@effect/platform-node";
+import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { Command } from "effect/unstable/cli";
 import PackageJson from "../package.json" with { type: "json" };
@@ -9,7 +9,7 @@ import { TracingLayer } from "./shared/tracing";
 
 const Live = Layer.mergeAll(
   NodeServices.layer,
-  NodeHttpClient.layerUndici,
+  NodeHttpClient.layerFetch,
   cliLoggerLayer,
   CliOutput.layer,
   Layer.succeed(Logger.LogToStderr, true),
