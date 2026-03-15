@@ -27,6 +27,9 @@ jobs:
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
+        with:
+          node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -45,3 +48,4 @@ jobs:
           publish: bun run changeset publish --provenance
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
