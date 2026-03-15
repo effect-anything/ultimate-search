@@ -14,7 +14,7 @@
   "license": "MIT",
   "author": "effect-x contributors",
   "bin": {
-    "ultimate-search": "./dist/cli.js"
+    "ultimate-search": "dist/cli.js"
   },
   "files": [
     "dist",
