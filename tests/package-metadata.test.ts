@@ -7,7 +7,7 @@ describe("package metadata", () => {
     expect(PackageJson.bin).toEqual({
       "ultimate-search": "./dist/cli.js",
     });
-    expect(PackageJson.files).toEqual(["dist", "README.md", "LICENSE", "SKILL.md"]);
+    expect(PackageJson.files).toEqual(["dist", "src", "README.md", "LICENSE", "SKILL.md"]);
     expect(PackageJson.publishConfig).toEqual({
       access: "public",
       provenance: true,
