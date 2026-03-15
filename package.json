@@ -1,6 +1,6 @@
 {
   "name": "@effect-x/ultimate-search",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI-first web search and MCP server for agents, built with Effect.",
   "keywords": [
     "agent",
