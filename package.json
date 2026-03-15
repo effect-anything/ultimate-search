@@ -38,8 +38,6 @@
     "prepack": "bun run build",
     "pack:check": "npm pack --dry-run",
     "release:check": "bun run check && bun run pack:check",
-    "release:version": "changeset version",
-    "release:publish": "changeset publish",
     "prepublishOnly": "bun run release:check"
   },
   "dependencies": {

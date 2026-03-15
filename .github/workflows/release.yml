@@ -37,14 +37,11 @@ jobs:
       - name: Check & Build
         run: bun run check && bun run build
 
-      - name: Create release PR or publish
+      - name: Create Release Pull Request or Publish
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: changesets
         uses: changesets/action@v1
         with:
-          version: bun run release:version
-          publish: bun run release:publish
-          title: Release packages
-          commit: Release packages
+          publish: bun run changeset publish --provenance
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NPM Trusted Publishing - no token needed!
-          NPM_CONFIG_PROVENANCE: true
