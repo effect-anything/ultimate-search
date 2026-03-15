@@ -147,8 +147,6 @@ bun run ./src/cli.ts mcp stdio
 ```bash
 bun run check
 bun run build
-bun run pack:check
-bun run release:check
 ```
 
 ## Release Workflow

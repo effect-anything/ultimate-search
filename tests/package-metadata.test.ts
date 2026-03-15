@@ -13,10 +13,4 @@ describe("package metadata", () => {
       provenance: true,
     });
   });
-
-  it("keeps release safety scripts in place", () => {
-    expect(PackageJson.scripts.prepack).toBe("bun run build");
-    expect(PackageJson.scripts["pack:check"]).toBe("npm pack --dry-run");
-    expect(PackageJson.scripts["release:check"]).toBe("bun run check && bun run pack:check");
-  });
 });

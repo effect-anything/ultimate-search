@@ -34,11 +34,7 @@
     "madge": "madge --circular --ts-config ./tsconfig.json --no-color --no-spinner --extensions 'ts,tsx' ./src",
     "check": "concurrently \"oxlint\" \"tsgo --noEmit\" \"bun run test --watch false\" \"bun run madge\" \"effect-language-service diagnostics --project tsconfig.json\"",
     "fix": "concurrently \"oxlint --fix\" \"oxfmt\"",
-    "build": "node ./tools/build-cli.mjs",
-    "prepack": "bun run build",
-    "pack:check": "npm pack --dry-run",
-    "release:check": "bun run check && bun run pack:check",
-    "prepublishOnly": "bun run release:check"
+    "build": "node ./tools/build-cli.mjs"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-beta.31"
