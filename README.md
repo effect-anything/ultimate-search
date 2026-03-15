@@ -4,10 +4,10 @@ A CLI-first web search toolkit for agents and automation.
 
 It can be used in two ways:
 
-- as an npm-executed CLI: `npx @effect-x/ultimate-search ...`
-- as a read-only MCP server over stdio: `npx @effect-x/ultimate-search mcp stdio`
+- as an npm-executed CLI: `npx ultimate-search ...`
+- as a read-only MCP server over stdio: `npx ultimate-search mcp stdio`
 
-After installation, the executable name remains `ultimate-search`.
+The executable name is `ultimate-search`.
 
 ## Features
 
@@ -23,7 +23,14 @@ After installation, the executable name remains `ultimate-search`.
 Run without installing:
 
 ```bash
-npx @effect-x/ultimate-search --help
+npx ultimate-search --help
+```
+
+Or with other package managers:
+
+```bash
+pnpm dlx ultimate-search --help
+bunx ultimate-search --help
 ```
 
 Install globally:
@@ -54,17 +61,17 @@ At minimum, configure:
 ### 2. Run the CLI
 
 ```bash
-npx @effect-x/ultimate-search search grok --query "latest bun release"
-npx @effect-x/ultimate-search search tavily --query "effect cli docs" --depth advanced --max-results 5
-npx @effect-x/ultimate-search search dual --query "FastAPI latest release" --include-answer --output llm
-npx @effect-x/ultimate-search fetch --url "https://effect.website" --output llm
-npx @effect-x/ultimate-search map --url "https://docs.tavily.com" --depth 2 --limit 100 --output llm
+npx ultimate-search search grok --query "latest bun release"
+npx ultimate-search search tavily --query "effect cli docs" --depth advanced --max-results 5
+npx ultimate-search search dual --query "FastAPI latest release" --include-answer --output llm
+npx ultimate-search fetch --url "https://effect.website" --output llm
+npx ultimate-search map --url "https://docs.tavily.com" --depth 2 --limit 100 --output llm
 ```
 
 ### 3. Start the MCP server
 
 ```bash
-npx @effect-x/ultimate-search mcp stdio
+npx ultimate-search mcp stdio
 ```
 
 Exposed read-only MCP tools:
