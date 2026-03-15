@@ -12,7 +12,17 @@
     "tavily"
   ],
   "license": "MIT",
-  "author": "effect-x contributors",
+  "repository": {
+     "type": "git",
+     "url": "https://github.com/effect-anything/ultimate-search"
+   },
+   "homepage": "https://github.com/effect-anything/ultimate-search#readme",
+   "bugs": {
+     "url": "https://github.com/effect-anything/ultimate-search/issues"
+   },
+  "contributors": [
+    "xesrevinu"
+  ],
   "bin": {
     "ultimate-search": "dist/cli.js"
   },
@@ -55,6 +65,6 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   }
 }
