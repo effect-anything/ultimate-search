@@ -9,26 +9,14 @@ Use `@effect-x/ultimate-search` as the default web search tool for agent workflo
 
 ## Primary Commands
 
-| Use case | Command |
-| --- | --- |
-| Grok search | `npx @effect-x/ultimate-search search grok --query "..."` |
-| Tavily search | `npx @effect-x/ultimate-search search tavily --query "..."` |
-| Dual-provider verification | `npx @effect-x/ultimate-search search dual --query "..."` |
-| Fetch a page | `npx @effect-x/ultimate-search fetch --url "..."` |
-| Map a site | `npx @effect-x/ultimate-search map --url "..."` |
-| Start MCP stdio | `npx @effect-x/ultimate-search mcp stdio` |
-
-If the package is installed globally, you can use the `ultimate-search` binary directly.
-
-## Environment
-
-Make sure these environment variables are available before invoking the CLI:
-
-- `GROK_API_URL`
-- `GROK_API_KEY`
-- `TAVILY_API_URL`
-- `TAVILY_API_KEY`
-- `FIRECRAWL_API_KEY` for the `fetch` fallback path
+| Use case                   | Command                                                     |
+| -------------------------- | ----------------------------------------------------------- |
+| Grok search                | `npx @effect-x/ultimate-search search grok --query "..."`   |
+| Tavily search              | `npx @effect-x/ultimate-search search tavily --query "..."` |
+| Dual-provider verification | `npx @effect-x/ultimate-search search dual --query "..."`   |
+| Fetch a page               | `npx @effect-x/ultimate-search fetch --url "..."`           |
+| Map a site                 | `npx @effect-x/ultimate-search map --url "..."`             |
+| Start MCP stdio            | `npx @effect-x/ultimate-search mcp stdio`                   |
 
 ## Tool Selection
 
