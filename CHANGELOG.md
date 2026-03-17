@@ -1,5 +1,11 @@
 # @effect-x/ultimate-search
 
+## 0.1.3
+
+### Patch Changes
+
+- 0f3dbbe: update release files
+
 ## 0.1.2
 
 ### Patch Changes
