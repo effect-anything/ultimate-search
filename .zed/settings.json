@@ -132,6 +132,7 @@
     "**/build",
     "**/dist",
     "**/.wrangler",
-    "**/*.tsbuildinfo"
+    "**/*.tsbuildinfo",
+    ".DS_Store"
   ]
 }

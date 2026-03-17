@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      id-token: write # Required for provenance and trusted publishing
+      id-token: write
       packages: write
     steps:
       - name: Checkout
@@ -37,15 +37,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check & Build
-        run: bun run check && bun run build
+      - name: Check and build
+        run: bun run check
 
-      - name: Create Release Pull Request or Publish
+      - name: Create release pull request or publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        id: changesets
         uses: changesets/action@v1
         with:
-          publish: bun run changeset publish --provenance
+          version: bun run version-packages
+          publish: bun run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"

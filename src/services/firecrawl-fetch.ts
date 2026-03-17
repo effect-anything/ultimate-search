@@ -5,10 +5,7 @@ import { ProviderContentError, type UltimateSearchError } from "../shared/errors
 import type { ServicesReturns } from "../shared/effect";
 import type { FetchedPage, WebFetchInput } from "./web-fetch-schema";
 
-const normalizeContent = (
-  response: FirecrawlScrapeResponse,
-  format: WebFetchInput["format"],
-) => {
+const normalizeContent = (response: FirecrawlScrapeResponse, format: WebFetchInput["format"]) => {
   const data = response.data;
 
   if (data == null) {

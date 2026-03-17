@@ -10,10 +10,7 @@ import {
 } from "../providers/tavily/schema";
 import { TavilyProviderClient } from "../providers/tavily/client";
 import { TavilyMap } from "../services/tavily-map";
-import {
-  optionalIntegerFlagWithSchema,
-  optionalTrimmedTextFlag,
-} from "../shared/cli-flags";
+import { optionalIntegerFlagWithSchema, optionalTrimmedTextFlag } from "../shared/cli-flags";
 import { runCommandWithOutput } from "../shared/command-output";
 import { outputFlag } from "../shared/output";
 import { absoluteUrlStringSchema } from "../shared/schema";
@@ -24,10 +21,7 @@ const mapCommandLayer = TavilyMap.layer.pipe(
 );
 
 const renderHumanMapResult = (result: TavilyMapResponse) => {
-  const lines = [
-    `Base URL: ${result.base_url}`,
-    `Discovered URLs: ${result.results.length}`,
-  ];
+  const lines = [`Base URL: ${result.base_url}`, `Discovered URLs: ${result.results.length}`];
 
   if (result.response_time !== undefined) {
     lines.push(`Response time: ${result.response_time}s`);

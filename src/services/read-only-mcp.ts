@@ -1,10 +1,7 @@
 import { Effect, Layer, Option, Schema } from "effect";
 import { McpServer, Tool, Toolkit } from "effect/unstable/ai";
 import { UltimateSearchConfig } from "../config/settings";
-import {
-  GrokSearchInput,
-  GrokSearchResultSchema,
-} from "../providers/grok/schema";
+import { GrokSearchInput, GrokSearchResultSchema } from "../providers/grok/schema";
 import { GrokProviderClient } from "../providers/grok/client";
 import {
   FetchContentFormatSchema,

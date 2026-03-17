@@ -22,8 +22,7 @@ export const GrokChatCompletionRequestSchema = Schema.Struct({
   messages: Schema.NonEmptyArray(GrokMessageSchema),
 });
 
-export type GrokChatCompletionRequest =
-  typeof GrokChatCompletionRequestSchema.Type;
+export type GrokChatCompletionRequest = typeof GrokChatCompletionRequestSchema.Type;
 
 export const GrokChatCompletionResponseSchema = Schema.Struct({
   model: Schema.String,
@@ -35,15 +34,14 @@ export const GrokChatCompletionResponseSchema = Schema.Struct({
   usage: GrokUsageSchema,
 });
 
-export type GrokChatCompletionResponse =
-  typeof GrokChatCompletionResponseSchema.Type;
+export type GrokChatCompletionResponse = typeof GrokChatCompletionResponseSchema.Type;
 
 export class GrokSearchInput extends Schema.Class<GrokSearchInput>("GrokSearchInput")({
   query: trimmedNonEmptyStringSchema("query must be a non-empty string"),
   platform: Schema.Option(Schema.NonEmptyString),
   model: Schema.Option(Schema.NonEmptyString),
 }) {
-  static decodeEffect = Schema.decodeUnknownEffect(GrokSearchInput)
+  static decodeEffect = Schema.decodeUnknownEffect(GrokSearchInput);
 }
 
 export interface GrokSearchResult {

@@ -45,10 +45,7 @@ export const commandSearchDual = Command.make(
       TavilySearchDepthSchema.literals,
       "Optional Tavily search depth.",
     ),
-    maxResults: optionalIntegerFlag(
-      "max-results",
-      "Optional number of Tavily results to return.",
-    ),
+    maxResults: optionalIntegerFlag("max-results", "Optional number of Tavily results to return."),
     topic: optionalChoiceFlag(
       "topic",
       TavilySearchTopicSchema.literals,

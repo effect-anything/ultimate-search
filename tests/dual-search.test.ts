@@ -23,11 +23,7 @@ const testLayer = Layer.empty;
 const makeDualSearchMockLayer = (
   grokLayer: Layer.Layer<any, any, any>,
   tavilyLayer: Layer.Layer<any, any, any>,
-) =>
-  DualSearch.layer.pipe(
-    Layer.provideMerge(grokLayer),
-    Layer.provideMerge(tavilyLayer),
-  );
+) => DualSearch.layer.pipe(Layer.provideMerge(grokLayer), Layer.provideMerge(tavilyLayer));
 
 it.layer(testLayer)((it) => {
   it.effect(

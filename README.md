@@ -1,56 +1,33 @@
 # @effect-x/ultimate-search
 
-A CLI-first web search toolkit for agents and automation.
+Node-first web search CLI and read-only MCP server for agents and automation.
 
-It can be used in two ways:
+## Highlights
 
-- as an npm-executed CLI: `npx @effect-x/ultimate-search ...`
-- as a read-only MCP server over stdio: `npx @effect-x/ultimate-search mcp stdio`
+- exposes `search`, `fetch`, and `map` commands for common agent research workflows
+- supports Grok, Tavily, and Firecrawl-backed retrieval flows behind one CLI surface
+- runs as a read-only MCP stdio server for tool-aware agent environments
+- bundles the CLI with `tsdown` while keeping Bun for dependency management and local development
+- publishes through a single-package Changesets workflow with npm provenance enabled
 
-After installation, the executable name is `ultimate-search`.
+## Install
 
-## Features
-
-- `search grok` for synthesis-oriented web search
-- `search tavily` for structured search with ranking and recency controls
-- `search dual` for cross-checking results across Grok and Tavily
-- `fetch` for page retrieval with Tavily Extract first and FireCrawl fallback
-- `map` for site URL discovery and documentation tree exploration
-- `mcp stdio` for exposing the same read-only surface to MCP clients
-
-## Installation
-
-Run without installing:
+Run it without installing:
 
 ```bash
 npx @effect-x/ultimate-search --help
 ```
 
-Or with other package managers:
-
-```bash
-pnpm dlx @effect-x/ultimate-search --help
-bunx @effect-x/ultimate-search --help
-```
-
-Install globally:
+Or install it globally:
 
 ```bash
 npm install --global @effect-x/ultimate-search
 ultimate-search --help
 ```
 
-## Quick Start
+## Usage
 
-### 1. Configure environment variables
-
-Copy the example file:
-
-```bash
-cp .env.example .env
-```
-
-At minimum, configure:
+Set the provider credentials you need in your shell or `.env` file:
 
 - `GROK_API_URL`
 - `GROK_API_KEY`
@@ -58,118 +35,35 @@ At minimum, configure:
 - `TAVILY_API_KEY`
 - `FIRECRAWL_API_KEY` for the `fetch` fallback path
 
-### 2. Run the CLI
+Run a few common commands:
 
 ```bash
-npx @effect-x/ultimate-search search grok --query "latest bun release"
-npx @effect-x/ultimate-search search tavily --query "effect cli docs" --depth advanced --max-results 5
-npx @effect-x/ultimate-search search dual --query "FastAPI latest release" --include-answer --output llm
-npx @effect-x/ultimate-search fetch --url "https://effect.website" --output llm
-npx @effect-x/ultimate-search map --url "https://docs.tavily.com" --depth 2 --limit 100 --output llm
-```
-
-### 3. Start the MCP server
-
-```bash
-npx @effect-x/ultimate-search mcp stdio
-```
-
-Exposed read-only MCP tools:
-
-- `search_grok`
-- `search_tavily`
-- `search_dual`
-- `fetch`
-- `map`
-
-## Usage
-
-### Output modes
-
-- default output is human-readable text
-- `--output llm` emits structured JSON for agents and automation
-- if `AGENT=1` is set and `--output` is omitted, commands may default to `llm`
-
-### Installed binary usage
-
-```bash
-ultimate-search --help
-ultimate-search search dual --query "Node.js latest release" --output llm
+ultimate-search search grok --query "latest bun release"
+ultimate-search search tavily --query "effect cli docs" --depth advanced --max-results 5
+ultimate-search search dual --query "FastAPI latest release" --include-answer --output llm
+ultimate-search fetch --url "https://effect.website" --output llm
+ultimate-search map --url "https://docs.tavily.com" --depth 2 --limit 100 --output llm
 ultimate-search mcp stdio
 ```
 
-### Command overview
+## Development
 
-- `ultimate-search search grok --query "..."`
-- `ultimate-search search tavily --query "..."`
-- `ultimate-search search dual --query "..."`
-- `ultimate-search fetch --url "..."`
-- `ultimate-search map --url "..."`
-- `ultimate-search mcp stdio`
-
-## Configuration
-
-### Required runtime variables
-
-- `GROK_API_URL`
-- `GROK_API_KEY`
-- `TAVILY_API_URL`
-- `TAVILY_API_KEY`
-
-### Optional runtime variables
-
-- `GROK_MODEL`
-- `FIRECRAWL_API_URL`
-- `FIRECRAWL_API_KEY`
-- `AGENT`
-
-## Local Development
-
-Repository maintenance uses Bun. Published artifacts target Node.js 20+.
+The repository uses Bun for dependency management and local commands. The published CLI targets Node.js 24+.
 
 ```bash
 bun install
-bun run build
-node ./dist/cli.js --help
-node ./dist/cli.js search grok --query "query"
-node ./dist/cli.js mcp stdio
-```
-
-You can also run the source entry directly during development:
-
-```bash
-bun run ./src/cli.ts search grok --query "query"
-bun run ./src/cli.ts mcp stdio
-```
-
-## Quality Checks
-
-```bash
 bun run check
-bun run build
+node ./dist/cli.js --help
 ```
 
-## Release Workflow
+## Release
 
-This repository uses Changesets and GitHub Actions for versioning and publishing.
-
-- release docs: `docs/publishing.md`
-- contribution guide: `CONTRIBUTING.md`
-- package skill instructions: `SKILL.md`
-
-Before the first publish, make sure the target GitHub repository provides:
-
-- an `NPM_TOKEN` secret
-- npm publish access for the `@effect-x` scope
-- trusted publishing / provenance setup if you want npm provenance enabled
-
-## Skill Integration
-
-The repository includes a root `SKILL.md` file for agent environments that support local skills:
+This package uses Changesets plus the shared GitHub Actions release workflow.
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/ultimate-search
-ln -sf "$(pwd)/SKILL.md" ~/.openclaw/workspace/skills/ultimate-search/SKILL.md
+bun run changeset
+bun run version-packages
+bun run release
 ```
 
 ## License

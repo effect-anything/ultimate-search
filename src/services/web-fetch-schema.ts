@@ -12,9 +12,7 @@ export const FetchBackendSchema = Schema.Literals(["tavily", "firecrawl"] as con
 export type FetchBackend = typeof FetchBackendSchema.Type;
 
 export class WebFetchInput extends Schema.Class<WebFetchInput>("WebFetchInput")({
-  urls: Schema.NonEmptyArray(
-    absoluteUrlStringSchema("url must be an absolute URL"),
-  ),
+  urls: Schema.NonEmptyArray(absoluteUrlStringSchema("url must be an absolute URL")),
   depth: TavilyExtractDepthSchema,
   format: FetchContentFormatSchema,
 }) {

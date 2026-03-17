@@ -2,10 +2,7 @@ import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { UltimateSearchConfig } from "../config/settings";
 import { FirecrawlProviderClient } from "../providers/firecrawl/client";
-import {
-  FetchContentFormatSchema,
-  TavilyExtractDepthSchema,
-} from "../providers/tavily/schema";
+import { FetchContentFormatSchema, TavilyExtractDepthSchema } from "../providers/tavily/schema";
 import { TavilyProviderClient } from "../providers/tavily/client";
 import { FirecrawlFetch } from "../services/firecrawl-fetch";
 import { TavilyExtract } from "../services/tavily-extract";

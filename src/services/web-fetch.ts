@@ -9,11 +9,7 @@ import {
 } from "../shared/errors";
 import type { ServicesReturns } from "../shared/effect";
 import { FirecrawlFetch } from "./firecrawl-fetch";
-import type {
-  FallbackReason,
-  WebFetchInput,
-  WebFetchResult,
-} from "./web-fetch-schema";
+import type { FallbackReason, WebFetchInput, WebFetchResult } from "./web-fetch-schema";
 import { TavilyExtract } from "./tavily-extract";
 
 const summarizeFallbackReason = (error: UltimateSearchError): FallbackReason => {
@@ -42,8 +38,7 @@ const resolveDoubleFailure = (
   primary: UltimateSearchError,
   fallback: UltimateSearchError,
 ): UltimateSearchError =>
-  fallback instanceof ConfigValidationError &&
-  !(primary instanceof ConfigValidationError)
+  fallback instanceof ConfigValidationError && !(primary instanceof ConfigValidationError)
     ? primary
     : fallback;
 
