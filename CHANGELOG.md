@@ -1,5 +1,11 @@
 # @effect-x/ultimate-search
 
+## 0.1.4
+
+### Patch Changes
+
+- e74c8a8: update release config
+
 ## 0.1.3
 
 ### Patch Changes
