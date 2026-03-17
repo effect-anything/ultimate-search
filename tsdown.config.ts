@@ -10,4 +10,18 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   fixedExtension: false,
+  ignoreWatch: [
+    ".git",
+    ".repo",
+    ".direnv",
+    ".lalph",
+    ".codemogger",
+    ".specs",
+    ".jj",
+    "dist",
+    "node_modules",
+    "bun.lock",
+    "flake.lock",
+  ],
+  exports: { all: true },
 });
