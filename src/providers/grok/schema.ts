@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect";
-import { trimmedNonEmptyStringSchema } from "../../shared/schema";
+import { trimmedNonEmptyStringSchema } from "../../shared/schema.ts";
 
 export const GrokUsageSchema = Schema.Struct({
   prompt_tokens: Schema.Number,

@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect";
-import { absoluteUrlStringSchema, trimmedNonEmptyStringSchema } from "../../shared/schema";
+import { absoluteUrlStringSchema, trimmedNonEmptyStringSchema } from "../../shared/schema.ts";
 
 export const TavilySearchDepthSchema = Schema.Literals(["basic", "advanced"] as const);
 

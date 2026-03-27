@@ -1,18 +1,18 @@
 import { Effect, Layer, Schema, ServiceMap } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { UltimateSearchConfig } from "../../config/settings";
-import type { ServicesReturns } from "../../shared/effect";
-import { ProviderDecodeError, type UltimateSearchError } from "../../shared/errors";
+import { UltimateSearchConfig } from "../../config/settings.ts";
+import type { ServicesReturns } from "../../shared/effect.ts";
+import { ProviderDecodeError, type UltimateSearchError } from "../../shared/errors.ts";
 import {
   catchProviderHttpError,
   decodeJsonResponse,
   makeProviderHttpClient,
-} from "../../shared/provider-http-client";
+} from "../../shared/provider-http-client.ts";
 import {
   type FirecrawlScrapeRequest,
   FirecrawlScrapeResponseSchema,
   type FirecrawlScrapeResponse,
-} from "./schema";
+} from "./schema.ts";
 
 const decodeFirecrawlScrapeResponse = Schema.decodeUnknownEffect(FirecrawlScrapeResponseSchema);
 
