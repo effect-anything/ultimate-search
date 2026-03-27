@@ -6,11 +6,11 @@ import {
   ProviderRequestError,
   ProviderResponseError,
   type UltimateSearchError,
-} from "../shared/errors";
-import type { ServicesReturns } from "../shared/effect";
-import { FirecrawlFetch } from "./firecrawl-fetch";
-import type { FallbackReason, WebFetchInput, WebFetchResult } from "./web-fetch-schema";
-import { TavilyExtract } from "./tavily-extract";
+} from "../shared/errors.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
+import { FirecrawlFetch } from "./firecrawl-fetch.ts";
+import type { FallbackReason, WebFetchInput, WebFetchResult } from "./web-fetch-schema.ts";
+import { TavilyExtract } from "./tavily-extract.ts";
 
 const summarizeFallbackReason = (error: UltimateSearchError): FallbackReason => {
   if (

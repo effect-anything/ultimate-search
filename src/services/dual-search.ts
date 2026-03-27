@@ -3,7 +3,7 @@ import {
   GrokSearchInput,
   GrokSearchResultSchema,
   type GrokSearchResult,
-} from "../providers/grok/schema";
+} from "../providers/grok/schema.ts";
 import {
   TavilySearchDepthSchema,
   TavilySearchInput,
@@ -11,13 +11,13 @@ import {
   type TavilySearchResponse,
   TavilySearchTopicSchema,
   TavilyTimeRangeSchema,
-} from "../providers/tavily/schema";
-import type { ServicesReturns } from "../shared/effect";
-import type { RenderedError } from "../shared/render-error";
-import { RenderedErrorSchema, renderStructuredError } from "../shared/render-error";
-import { trimmedNonEmptyStringSchema } from "../shared/schema";
-import { GrokSearch } from "./grok-search";
-import { TavilySearch } from "./tavily-search";
+} from "../providers/tavily/schema.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
+import type { RenderedError } from "../shared/render-error.ts";
+import { RenderedErrorSchema, renderStructuredError } from "../shared/render-error.ts";
+import { trimmedNonEmptyStringSchema } from "../shared/schema.ts";
+import { GrokSearch } from "./grok-search.ts";
+import { TavilySearch } from "./tavily-search.ts";
 
 export class DualSearchInput extends Schema.Class<DualSearchInput>("DualSearchInput")({
   query: trimmedNonEmptyStringSchema("query must be a non-empty string"),

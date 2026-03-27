@@ -1,8 +1,8 @@
 import { Effect, Layer, Option, Schema } from "effect";
 import { McpServer, Tool, Toolkit } from "effect/unstable/ai";
-import { UltimateSearchConfig } from "../config/settings";
-import { GrokSearchInput, GrokSearchResultSchema } from "../providers/grok/schema";
-import { GrokProviderClient } from "../providers/grok/client";
+import { UltimateSearchConfig } from "../config/settings.ts";
+import { GrokSearchInput, GrokSearchResultSchema } from "../providers/grok/schema.ts";
+import { GrokProviderClient } from "../providers/grok/client.ts";
 import {
   FetchContentFormatSchema,
   TavilyMapBreadthSchema,
@@ -15,19 +15,19 @@ import {
   TavilySearchResponseSchema,
   TavilySearchTopicSchema,
   TavilyTimeRangeSchema,
-} from "../providers/tavily/schema";
-import { TavilyProviderClient } from "../providers/tavily/client";
-import { FirecrawlProviderClient } from "../providers/firecrawl/client";
-import { DualSearch, DualSearchInput, DualSearchResultSchema } from "./dual-search";
-import { FirecrawlFetch } from "./firecrawl-fetch";
-import { GrokSearch } from "./grok-search";
-import { TavilyMap } from "./tavily-map";
-import { TavilyExtract } from "./tavily-extract";
-import { TavilySearch } from "./tavily-search";
-import { WebFetch } from "./web-fetch";
-import { WebFetchInput, WebFetchResultSchema } from "./web-fetch-schema";
-import { RenderedErrorSchema, renderStructuredError } from "../shared/render-error";
-import { absoluteUrlStringSchema, trimmedNonEmptyStringSchema } from "../shared/schema";
+} from "../providers/tavily/schema.ts";
+import { TavilyProviderClient } from "../providers/tavily/client.ts";
+import { FirecrawlProviderClient } from "../providers/firecrawl/client.ts";
+import { DualSearch, DualSearchInput, DualSearchResultSchema } from "./dual-search.ts";
+import { FirecrawlFetch } from "./firecrawl-fetch.ts";
+import { GrokSearch } from "./grok-search.ts";
+import { TavilyMap } from "./tavily-map.ts";
+import { TavilyExtract } from "./tavily-extract.ts";
+import { TavilySearch } from "./tavily-search.ts";
+import { WebFetch } from "./web-fetch.ts";
+import { WebFetchInput, WebFetchResultSchema } from "./web-fetch-schema.ts";
+import { RenderedErrorSchema, renderStructuredError } from "../shared/render-error.ts";
+import { absoluteUrlStringSchema, trimmedNonEmptyStringSchema } from "../shared/schema.ts";
 
 const optionalTrimmedTextField = (message: string) =>
   Schema.optional(trimmedNonEmptyStringSchema(message));

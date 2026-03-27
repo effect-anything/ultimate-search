@@ -1,9 +1,9 @@
 import { Effect, Layer, ServiceMap } from "effect";
-import { TavilyProviderClient } from "../providers/tavily/client";
-import { buildTavilyExtractRequest } from "../providers/tavily/schema";
-import { ProviderContentError, type UltimateSearchError } from "../shared/errors";
-import type { ServicesReturns } from "../shared/effect";
-import type { FetchedPage, WebFetchInput } from "./web-fetch-schema";
+import { TavilyProviderClient } from "../providers/tavily/client.ts";
+import { buildTavilyExtractRequest } from "../providers/tavily/schema.ts";
+import { ProviderContentError, type UltimateSearchError } from "../shared/errors.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
+import type { FetchedPage, WebFetchInput } from "./web-fetch-schema.ts";
 
 const normalizeContent = (content: string | null | undefined) => {
   const text = content?.trim() ?? "";

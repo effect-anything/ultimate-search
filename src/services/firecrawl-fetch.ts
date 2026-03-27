@@ -1,9 +1,9 @@
 import { Effect, Layer, Result, ServiceMap } from "effect";
-import { FirecrawlProviderClient } from "../providers/firecrawl/client";
-import type { FirecrawlScrapeResponse } from "../providers/firecrawl/schema";
-import { ProviderContentError, type UltimateSearchError } from "../shared/errors";
-import type { ServicesReturns } from "../shared/effect";
-import type { FetchedPage, WebFetchInput } from "./web-fetch-schema";
+import { FirecrawlProviderClient } from "../providers/firecrawl/client.ts";
+import type { FirecrawlScrapeResponse } from "../providers/firecrawl/schema.ts";
+import { ProviderContentError, type UltimateSearchError } from "../shared/errors.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
+import type { FetchedPage, WebFetchInput } from "./web-fetch-schema.ts";
 
 const normalizeContent = (response: FirecrawlScrapeResponse, format: WebFetchInput["format"]) => {
   const data = response.data;

@@ -1,12 +1,12 @@
 import { Effect, Layer, ServiceMap } from "effect";
-import { TavilyProviderClient } from "../providers/tavily/client";
+import { TavilyProviderClient } from "../providers/tavily/client.ts";
 import {
   buildTavilySearchRequest,
   TavilySearchInput,
   type TavilySearchResponse,
-} from "../providers/tavily/schema";
-import type { UltimateSearchError } from "../shared/errors";
-import type { ServicesReturns } from "../shared/effect";
+} from "../providers/tavily/schema.ts";
+import type { UltimateSearchError } from "../shared/errors.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
 
 export class TavilySearch extends ServiceMap.Service<
   TavilySearch,

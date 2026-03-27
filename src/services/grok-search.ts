@@ -1,15 +1,15 @@
 import { Effect, Layer, Option, ServiceMap } from "effect";
-import { UltimateSearchConfig } from "../config/settings";
-import { GrokProviderClient } from "../providers/grok/client";
+import { UltimateSearchConfig } from "../config/settings.ts";
+import { GrokProviderClient } from "../providers/grok/client.ts";
 import {
   buildGrokUserMessage,
   type GrokChatCompletionRequest,
   GrokSearchInput,
   type GrokSearchResult,
   grokSystemPrompt,
-} from "../providers/grok/schema";
-import type { UltimateSearchError } from "../shared/errors";
-import type { ServicesReturns } from "../shared/effect";
+} from "../providers/grok/schema.ts";
+import type { UltimateSearchError } from "../shared/errors.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
 
 export class GrokSearch extends ServiceMap.Service<
   GrokSearch,

@@ -3,9 +3,9 @@ import {
   FetchContentFormatSchema,
   TavilyExtractDepthSchema,
   type FetchContentFormat,
-} from "../providers/tavily/schema";
-import { SearchProvider } from "../shared/errors";
-import { absoluteUrlStringSchema } from "../shared/schema";
+} from "../providers/tavily/schema.ts";
+import { SearchProvider } from "../shared/errors.ts";
+import { absoluteUrlStringSchema } from "../shared/schema.ts";
 
 export const FetchBackendSchema = Schema.Literals(["tavily", "firecrawl"] as const);
 
