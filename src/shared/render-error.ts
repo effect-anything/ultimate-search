@@ -5,7 +5,7 @@ import {
   ProviderDecodeError,
   ProviderRequestError,
   ProviderResponseError,
-} from "./errors";
+} from "./errors.ts";
 
 export interface RenderedError {
   readonly type: string;

@@ -1,5 +1,5 @@
 import { Effect, Option } from "effect";
-import { CliOutput, type OutputMode, resolveOutputMode } from "./output";
+import { CliOutput, type OutputMode, resolveOutputMode } from "./output.ts";
 
 export interface CommandOutput {
   readonly human: string;

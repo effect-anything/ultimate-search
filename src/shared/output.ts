@@ -6,8 +6,8 @@ import {
   ProviderDecodeError,
   ProviderRequestError,
   ProviderResponseError,
-} from "./errors";
-import { renderStructuredError } from "./render-error";
+} from "./errors.ts";
+import { renderStructuredError } from "./render-error.ts";
 
 const stringify = (value: unknown) => JSON.stringify(value, null, 2);
 const maxHumanErrorBodyLength = 500;

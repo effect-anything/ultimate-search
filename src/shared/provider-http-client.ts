@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { HttpClient, HttpClientError, type HttpClientResponse } from "effect/unstable/http";
-import { ProviderRequestError, ProviderResponseError } from "./errors";
+import { ProviderRequestError, ProviderResponseError } from "./errors.ts";
 
 export type ProviderHttpClientName = "shared" | "grok" | "tavily" | "firecrawl";
 
