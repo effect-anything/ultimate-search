@@ -3,9 +3,9 @@ import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { Command } from "effect/unstable/cli";
 import PackageJson from "../package.json" with { type: "json" };
-import { commandRoot } from "./commands/root";
-import { CliOutput, cliLoggerLayer } from "./shared/output";
-import { TracingLayer } from "./shared/tracing";
+import { commandRoot } from "./commands/root.ts";
+import { CliOutput, cliLoggerLayer } from "./shared/output.ts";
+import { TracingLayer } from "./shared/tracing.ts";
 
 const Live = Layer.mergeAll(
   NodeServices.layer,

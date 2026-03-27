@@ -1,8 +1,8 @@
 import { Command } from "effect/unstable/cli";
-import { commandFetch } from "./fetch";
-import { commandMap } from "./map";
-import { commandMcp } from "./mcp";
-import { commandSearch } from "./search";
+import { commandFetch } from "./fetch.ts";
+import { commandMap } from "./map.ts";
+import { commandMcp } from "./mcp.ts";
+import { commandSearch } from "./search.ts";
 
 export const commandRoot = Command.make("ultimate-search").pipe(
   Command.withDescription("CLI entrypoint for search, fetch, map, and MCP workflows."),

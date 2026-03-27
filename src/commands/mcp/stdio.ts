@@ -5,7 +5,7 @@ import PackageJson from "../../../package.json" with { type: "json" };
 import {
   readOnlyMcpRegistrationLayer,
   readOnlyMcpServicesLayer,
-} from "../../services/read-only-mcp";
+} from "../../services/read-only-mcp.ts";
 
 const mcpStdioServerLayer = readOnlyMcpRegistrationLayer.pipe(
   Layer.provideMerge(

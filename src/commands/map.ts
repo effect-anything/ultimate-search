@@ -1,19 +1,19 @@
 import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { UltimateSearchConfig } from "../config/settings";
+import { UltimateSearchConfig } from "../config/settings.ts";
 import {
   TavilyMapBreadthSchema,
   TavilyMapDepthSchema,
   TavilyMapInput,
   TavilyMapLimitSchema,
   type TavilyMapResponse,
-} from "../providers/tavily/schema";
-import { TavilyProviderClient } from "../providers/tavily/client";
-import { TavilyMap } from "../services/tavily-map";
-import { optionalIntegerFlagWithSchema, optionalTrimmedTextFlag } from "../shared/cli-flags";
-import { runCommandWithOutput } from "../shared/command-output";
-import { outputFlag } from "../shared/output";
-import { absoluteUrlStringSchema } from "../shared/schema";
+} from "../providers/tavily/schema.ts";
+import { TavilyProviderClient } from "../providers/tavily/client.ts";
+import { TavilyMap } from "../services/tavily-map.ts";
+import { optionalIntegerFlagWithSchema, optionalTrimmedTextFlag } from "../shared/cli-flags.ts";
+import { runCommandWithOutput } from "../shared/command-output.ts";
+import { outputFlag } from "../shared/output.ts";
+import { absoluteUrlStringSchema } from "../shared/schema.ts";
 
 const mapCommandLayer = TavilyMap.layer.pipe(
   Layer.provideMerge(TavilyProviderClient.layer),

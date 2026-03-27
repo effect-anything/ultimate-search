@@ -1,13 +1,13 @@
 import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { UltimateSearchConfig } from "../../config/settings";
-import { GrokProviderClient } from "../../providers/grok/client";
-import { GrokSearchInput, type GrokSearchResult } from "../../providers/grok/schema";
-import { GrokSearch } from "../../services/grok-search";
-import { optionalTrimmedTextFlag } from "../../shared/cli-flags";
-import { runCommandWithOutput } from "../../shared/command-output";
-import { outputFlag } from "../../shared/output";
-import { trimmedNonEmptyStringSchema } from "../../shared/schema";
+import { UltimateSearchConfig } from "../../config/settings.ts";
+import { GrokProviderClient } from "../../providers/grok/client.ts";
+import { GrokSearchInput, type GrokSearchResult } from "../../providers/grok/schema.ts";
+import { GrokSearch } from "../../services/grok-search.ts";
+import { optionalTrimmedTextFlag } from "../../shared/cli-flags.ts";
+import { runCommandWithOutput } from "../../shared/command-output.ts";
+import { outputFlag } from "../../shared/output.ts";
+import { trimmedNonEmptyStringSchema } from "../../shared/schema.ts";
 
 const grokCommandLayer = GrokSearch.layer.pipe(
   Layer.provideMerge(GrokProviderClient.layer),

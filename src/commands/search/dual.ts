@@ -1,24 +1,24 @@
 import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { UltimateSearchConfig } from "../../config/settings";
-import { GrokProviderClient } from "../../providers/grok/client";
+import { UltimateSearchConfig } from "../../config/settings.ts";
+import { GrokProviderClient } from "../../providers/grok/client.ts";
 import {
   TavilySearchDepthSchema,
   TavilySearchTopicSchema,
   TavilyTimeRangeSchema,
-} from "../../providers/tavily/schema";
-import { TavilyProviderClient } from "../../providers/tavily/client";
-import { DualSearch, DualSearchInput } from "../../services/dual-search";
-import { GrokSearch } from "../../services/grok-search";
-import { TavilySearch } from "../../services/tavily-search";
+} from "../../providers/tavily/schema.ts";
+import { TavilyProviderClient } from "../../providers/tavily/client.ts";
+import { DualSearch, DualSearchInput } from "../../services/dual-search.ts";
+import { GrokSearch } from "../../services/grok-search.ts";
+import { TavilySearch } from "../../services/tavily-search.ts";
 import {
   optionalChoiceFlag,
   optionalIntegerFlag,
   optionalTrimmedTextFlag,
-} from "../../shared/cli-flags";
-import { runCommandWithOutput } from "../../shared/command-output";
-import { outputFlag, renderJsonText } from "../../shared/output";
-import { trimmedNonEmptyStringSchema } from "../../shared/schema";
+} from "../../shared/cli-flags.ts";
+import { runCommandWithOutput } from "../../shared/command-output.ts";
+import { outputFlag, renderJsonText } from "../../shared/output.ts";
+import { trimmedNonEmptyStringSchema } from "../../shared/schema.ts";
 
 const dualCommandLayer = DualSearch.layer.pipe(
   Layer.provideMerge(GrokSearch.layer),

@@ -1,16 +1,16 @@
 import { Effect, Layer } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { UltimateSearchConfig } from "../config/settings";
-import { FirecrawlProviderClient } from "../providers/firecrawl/client";
-import { FetchContentFormatSchema, TavilyExtractDepthSchema } from "../providers/tavily/schema";
-import { TavilyProviderClient } from "../providers/tavily/client";
-import { FirecrawlFetch } from "../services/firecrawl-fetch";
-import { TavilyExtract } from "../services/tavily-extract";
-import { WebFetch } from "../services/web-fetch";
-import { WebFetchInput, type WebFetchResult } from "../services/web-fetch-schema";
-import { runCommandWithOutput } from "../shared/command-output";
-import { outputFlag } from "../shared/output";
-import { absoluteUrlStringSchema } from "../shared/schema";
+import { UltimateSearchConfig } from "../config/settings.ts";
+import { FirecrawlProviderClient } from "../providers/firecrawl/client.ts";
+import { FetchContentFormatSchema, TavilyExtractDepthSchema } from "../providers/tavily/schema.ts";
+import { TavilyProviderClient } from "../providers/tavily/client.ts";
+import { FirecrawlFetch } from "../services/firecrawl-fetch.ts";
+import { TavilyExtract } from "../services/tavily-extract.ts";
+import { WebFetch } from "../services/web-fetch.ts";
+import { WebFetchInput, type WebFetchResult } from "../services/web-fetch-schema.ts";
+import { runCommandWithOutput } from "../shared/command-output.ts";
+import { outputFlag } from "../shared/output.ts";
+import { absoluteUrlStringSchema } from "../shared/schema.ts";
 
 const fetchCommandLayer = WebFetch.layer.pipe(
   Layer.provideMerge(FirecrawlFetch.layer),
