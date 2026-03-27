@@ -1,5 +1,11 @@
 # @effect-x/ultimate-search
 
+## 0.1.6
+
+### Patch Changes
+
+- 09c38ff: upgrade
+
 ## 0.1.5
 
 ### Patch Changes
