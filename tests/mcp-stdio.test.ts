@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { Schema } from "effect";
 import PackageJson from "../package.json" with { type: "json" };
-import { readOnlyMcpToolNames } from "../src/services/read-only-mcp";
+import { readOnlyMcpToolNames } from "../src/services/read-only-mcp.ts";
 import { afterEach, expect, it } from "vitest";
 
 const expectedSearchTavilyText =

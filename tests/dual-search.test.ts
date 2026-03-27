@@ -1,10 +1,10 @@
 import { it } from "@effect/vitest";
 import { Deferred, Effect, Exit, Layer, Option } from "effect";
 import { expect } from "vitest";
-import { ProviderResponseError } from "../src/shared/errors";
-import { DualSearch, DualSearchInput } from "../src/services/dual-search";
-import { GrokSearch } from "../src/services/grok-search";
-import { TavilySearch } from "../src/services/tavily-search";
+import { ProviderResponseError } from "../src/shared/errors.ts";
+import { DualSearch, DualSearchInput } from "../src/services/dual-search.ts";
+import { GrokSearch } from "../src/services/grok-search.ts";
+import { TavilySearch } from "../src/services/tavily-search.ts";
 
 const makeInput = () =>
   DualSearchInput.decodeEffect({

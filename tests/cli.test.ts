@@ -18,8 +18,8 @@ import { Command } from "effect/unstable/cli";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 import { expect } from "vitest";
 import PackageJson from "../package.json" with { type: "json" };
-import { commandRoot } from "../src/commands/root";
-import { CliOutput, cliLoggerLayer } from "../src/shared/output";
+import { commandRoot } from "../src/commands/root.ts";
+import { CliOutput, cliLoggerLayer } from "../src/shared/output.ts";
 
 const textDecoder = new TextDecoder();
 
@@ -182,12 +182,7 @@ const runCli = (
     ),
   );
 
-type TestDecodeSchema<A> = Schema.Top & {
-  readonly Type: A;
-  readonly DecodingServices: never;
-};
-
-const decodeJson = <A>(schema: TestDecodeSchema<A>, text: string): A => {
+const decodeJson = <A>(schema: Schema.Codec<A>, text: string): A => {
   const unknownJson = Schema.decodeUnknownSync(Schema.UnknownFromJsonString)(text);
 
   return Schema.decodeUnknownSync(schema)(unknownJson);

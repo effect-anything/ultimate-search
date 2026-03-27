@@ -1,10 +1,10 @@
 import { Config, Effect, Layer, Option, ServiceMap } from "effect";
-import { ConfigValidationError, type UltimateSearchError } from "../shared/errors";
-import type { ServicesReturns } from "../shared/effect";
+import { ConfigValidationError, type UltimateSearchError } from "../shared/errors.ts";
+import type { ServicesReturns } from "../shared/effect.ts";
 import {
   optionalAbsoluteUrlStringFromStringSchema,
   optionalTrimmedNonEmptyStringFromStringSchema,
-} from "../shared/schema";
+} from "../shared/schema.ts";
 
 export interface ProviderEnvironment {
   readonly apiUrl: Option.Option<string>;
